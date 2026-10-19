@@ -18,8 +18,7 @@ public sealed unsafe class Renderer : IDisposable
 {
     private static readonly Guid SwapChainPanelNativeIid = new("63aad0b8-7c24-40ff-85a8-640d944cc325");
 
-    private const float FixedStep = 1f / 60f;
-    private const int MaxStepsPerFrame = 5;
+    private const float MaxFrameDelta = 0.1f;
 
     private readonly SwapChainPanel _panel;
     private readonly Simulation _simulation;
@@ -40,10 +39,14 @@ public sealed unsafe class Renderer : IDisposable
     private readonly ID3D11DepthStencilState _depthState;
     private readonly ID3D11RasterizerState _rasterizerState;
     private readonly InstanceData[] _instances;
+    private readonly object _sync = new();
+    private readonly Thread _renderThread;
+    private volatile bool _running = true;
     private readonly uint _birdVertexCount;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private double _lastTime;
-    private float _accumulator;
+    private double _fpsWindowStart;
+    private int _fpsFrames;
     private uint _width;
     private uint _height;
 
@@ -105,8 +108,12 @@ public sealed unsafe class Renderer : IDisposable
         _depthState = _device.CreateDepthStencilState(DepthStencilDescription.Default);
         _rasterizerState = _device.CreateRasterizerState(new RasterizerDescription(CullMode.None, FillMode.Solid));
 
+        ApplyInverseScale();
         panel.SizeChanged += OnSizeChanged;
-        Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += OnRendering;
+        panel.CompositionScaleChanged += OnCompositionScaleChanged;
+
+        _renderThread = new Thread(RenderLoop) { IsBackground = true, Name = "Render" };
+        _renderThread.Start();
     }
 
     private void AttachToPanel()
@@ -191,43 +198,74 @@ public sealed unsafe class Renderer : IDisposable
         _context.Unmap(buffer);
     }
 
-    private void OnSizeChanged(object sender, SizeChangedEventArgs e)
-    {
-        uint w = (uint)Math.Max(1, (int)(e.NewSize.Width * _panel.CompositionScaleX));
-        uint h = (uint)Math.Max(1, (int)(e.NewSize.Height * _panel.CompositionScaleY));
-        if (w == _width && h == _height) return;
+    private void OnSizeChanged(object sender, SizeChangedEventArgs e) => Resize();
 
-        _width = w;
-        _height = h;
-        _context.ClearState();
-        _rtv.Dispose();
-        _dsv.Dispose();
-        _depthTexture.Dispose();
-        _swapChain.ResizeBuffers(0, w, h, Format.Unknown, SwapChainFlags.None).CheckError();
-        _rtv = CreateRenderTargetView();
-        (_depthTexture, _dsv) = CreateDepthBuffer();
+    private void OnCompositionScaleChanged(SwapChainPanel sender, object args) => Resize();
+
+    // The panel scales the swap chain by the DPI scale, so undo it to get a 1:1 pixel mapping.
+    private void ApplyInverseScale()
+    {
+        using var swapChain2 = _swapChain.QueryInterface<IDXGISwapChain2>();
+        swapChain2.MatrixTransform = Matrix3x2.CreateScale(1f / _panel.CompositionScaleX, 1f / _panel.CompositionScaleY);
     }
 
-    private void OnRendering(object? sender, object e)
+    private void Resize()
     {
-        Update();
-        Draw();
+        uint w = (uint)Math.Max(1, (int)(_panel.ActualWidth * _panel.CompositionScaleX));
+        uint h = (uint)Math.Max(1, (int)(_panel.ActualHeight * _panel.CompositionScaleY));
+
+        lock (_sync)
+        {
+            ApplyInverseScale();
+            if (w == _width && h == _height) return;
+
+            _width = w;
+            _height = h;
+            _context.ClearState();
+            _rtv.Dispose();
+            _dsv.Dispose();
+            _depthTexture.Dispose();
+            _swapChain.ResizeBuffers(0, w, h, Format.Unknown, SwapChainFlags.None).CheckError();
+            _rtv = CreateRenderTargetView();
+            (_depthTexture, _dsv) = CreateDepthBuffer();
+        }
+    }
+
+    // Raised on the render thread about twice a second.
+    public event Action<double>? FpsUpdated;
+
+    // Presents with vsync, so each iteration is one display frame and one simulation step.
+    private void RenderLoop()
+    {
+        while (_running)
+        {
+            lock (_sync)
+            {
+                Update();
+                Draw();
+            }
+            CountFrame();
+        }
+    }
+
+    private void CountFrame()
+    {
+        _fpsFrames++;
+        double now = _clock.Elapsed.TotalSeconds;
+        double elapsed = now - _fpsWindowStart;
+        if (elapsed < 0.5) return;
+
+        FpsUpdated?.Invoke(_fpsFrames / elapsed);
+        _fpsFrames = 0;
+        _fpsWindowStart = now;
     }
 
     private void Update()
     {
         double now = _clock.Elapsed.TotalSeconds;
-        _accumulator += (float)(now - _lastTime);
+        float dt = Math.Min((float)(now - _lastTime), MaxFrameDelta);
         _lastTime = now;
-
-        int steps = 0;
-        while (_accumulator >= FixedStep && steps < MaxStepsPerFrame)
-        {
-            _simulation.Step(FixedStep);
-            _accumulator -= FixedStep;
-            steps++;
-        }
-        if (steps == MaxStepsPerFrame) _accumulator = 0;
+        if (dt > 0f) _simulation.Step(dt);
     }
 
     private void Draw()
@@ -276,8 +314,10 @@ public sealed unsafe class Renderer : IDisposable
 
     public void Dispose()
     {
-        Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= OnRendering;
+        _running = false;
+        _renderThread.Join();
         _panel.SizeChanged -= OnSizeChanged;
+        _panel.CompositionScaleChanged -= OnCompositionScaleChanged;
         _rasterizerState.Dispose();
         _depthState.Dispose();
         _groundInstanceBuffer.Dispose();

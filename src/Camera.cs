@@ -4,11 +4,11 @@ namespace Murmuration;
 
 public static class Camera
 {
-    private static readonly Vector3 Eye = new(-50, -50, 25);
+    private static readonly Vector3 Eye = new(-15, -15, 25);
     private static readonly Vector3 Target = new(0, 0, 25);
 
-    // Horizontal FOV of 100 degrees covers the 90 degrees needed to see the side corners.
-    private const float HorizontalFov = 100f * MathF.PI / 180f;
+    // Horizontal FOV in radians
+    private const float HorizontalFov = 60f * MathF.PI / 180f;
 
     public static Matrix4x4 ViewProjection(float aspect)
     {
