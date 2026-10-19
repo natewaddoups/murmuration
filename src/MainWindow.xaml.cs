@@ -10,7 +10,7 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        _renderer = new Renderer(Panel, new Simulation(count: 400));
+        _renderer = new Renderer(Panel, new Simulation(count: 600));
         _renderer.FpsUpdated += OnFpsUpdated;
         Closed += (_, _) =>
         {

@@ -73,18 +73,9 @@ public sealed class Simulation
 
             Vector3 toCenter = Vector3.Zero;
             Vector3 offset = Center - b.Position;
-            float manhattan = Math.Abs(offset.X) + Math.Abs(offset.Y) + Math.Abs(offset.Z);
-            if (manhattan > CenterRadius)
-                toCenter = Steer(b.Direction, offset, maxAngle) - b.Direction;
 
             Vector3 toNeighbor = Vector3.Zero;
             Vector3 alignment = Vector3.Zero;
-            if (TryGetNeighbor(i, out int neighbor, out Vector3 target))
-            {
-                toNeighbor = Steer(b.Direction, target - b.Position, maxAngle) - b.Direction;
-                alignment = Steer(b.Direction, birds[neighbor].Direction, maxAngle) - b.Direction;
-            }
-
             Vector3 climbYaw = Vector3.Zero;
             if (b.Direction.Z > 0f && b.Climb != ClimbDirection.Neither)
             {
@@ -92,6 +83,18 @@ public sealed class Simulation
                 float yaw = maxAngle * b.ClimbStrength * (b.Climb == ClimbDirection.Left ? 1f : -1f);
                 var rotation = Quaternion.CreateFromAxisAngle(b.Up, yaw);
                 climbYaw = Vector3.Transform(b.Direction, rotation) - b.Direction;
+            } 
+            else
+            {
+                float manhattan = Math.Abs(offset.X) + Math.Abs(offset.Y) + Math.Abs(offset.Z);
+                if (manhattan > CenterRadius)
+                    toCenter = Steer(b.Direction, offset, maxAngle) - b.Direction;
+            }
+
+            if (TryGetNeighbor(i, out int neighbor, out Vector3 target))
+            {
+                toNeighbor = Steer(b.Direction, target - b.Position, maxAngle) - b.Direction;
+                alignment = Steer(b.Direction, birds[neighbor].Direction, maxAngle) - b.Direction;
             }
 
             Vector3 sum = b.Direction + toCenter + toNeighbor + alignment + climbYaw;
@@ -111,7 +114,7 @@ public sealed class Simulation
             if (oldDir.Z <= 0f && newDir.Z > 0f)
             {
                 double roll = _rng.NextDouble();
-                double subset = 0.4;
+                double subset = 0.2;
                 b.Climb = roll < subset ? ClimbDirection.Left : roll < (subset * 2) ? ClimbDirection.Right : ClimbDirection.Neither;
             }
         }
