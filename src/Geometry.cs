@@ -28,9 +28,10 @@ public static class Geometry
 {
     public const float GroundHalfSize = 50f;
 
-    private static readonly Vector3 WingColor = new(0.92f, 0.92f, 0.92f);
-    private static readonly Vector3 HeadColor = new(0.95f, 0.55f, 0.1f);
-    private static readonly Vector3 TailColor = new(0.55f, 0.55f, 0.6f);
+    private static readonly Vector3 Blue = new(0.2f, 0.4f, 0.95f);
+    private static readonly Vector3 Green = new(0.2f, 0.7f, 0.25f);
+    private static readonly Vector3 White = new(1f, 1f, 1f);
+    private static readonly Vector3 MediumGray = new(0.5f, 0.5f, 0.5f);
     private static readonly Vector3 GroundColor = new(0.15f, 0.55f, 0.2f);
 
     // Bird local axes: x forward, y left, z up; units are meters.
@@ -48,7 +49,7 @@ public static class Geometry
                 new Vector3(wingHalfWidth, 0, -wingHalfHeight),
                 new Vector3(0, 0, wingHalfHeight),
                 new Vector3(0, side * wingLength, 0),
-                WingColor);
+                Blue, Green);
         }
 
         AddTetrahedron(v,
@@ -56,14 +57,14 @@ public static class Geometry
             new Vector3(0, 0.015f, -0.01f),
             new Vector3(0, 0, 0.01f),
             new Vector3(0.10f, 0, 0),
-            HeadColor);
+            White, MediumGray);
 
         AddTetrahedron(v,
             new Vector3(-0.10f, -0.025f, -0.0025f),
             new Vector3(-0.10f, 0.025f, -0.0025f),
             new Vector3(-0.10f, 0, 0.0025f),
             Vector3.Zero,
-            TailColor);
+            Blue, MediumGray);
 
         return v.ToArray();
     }
@@ -79,16 +80,22 @@ public static class Geometry
         return [a, b, c, a, c, d];
     }
 
-    private static void AddTetrahedron(List<Vertex> v, Vector3 a, Vector3 b, Vector3 c, Vector3 apex, Vector3 color)
+    // A face is "top" when its outward normal points up (+Z), otherwise "bottom".
+    private static void AddTetrahedron(List<Vertex> v, Vector3 a, Vector3 b, Vector3 c, Vector3 apex, Vector3 topColor, Vector3 bottomColor)
     {
-        AddTriangle(v, a, b, c, color);
-        AddTriangle(v, a, b, apex, color);
-        AddTriangle(v, b, c, apex, color);
-        AddTriangle(v, c, a, apex, color);
+        Vector3 centroid = (a + b + c + apex) / 4f;
+        AddTriangle(v, a, b, c, centroid, topColor, bottomColor);
+        AddTriangle(v, a, b, apex, centroid, topColor, bottomColor);
+        AddTriangle(v, b, c, apex, centroid, topColor, bottomColor);
+        AddTriangle(v, c, a, apex, centroid, topColor, bottomColor);
     }
 
-    private static void AddTriangle(List<Vertex> v, Vector3 a, Vector3 b, Vector3 c, Vector3 color)
+    private static void AddTriangle(List<Vertex> v, Vector3 a, Vector3 b, Vector3 c, Vector3 solidCentroid, Vector3 topColor, Vector3 bottomColor)
     {
+        Vector3 normal = Vector3.Cross(b - a, c - a);
+        if (Vector3.Dot(normal, (a + b + c) / 3f - solidCentroid) < 0) normal = -normal;
+        Vector3 color = normal.Z >= 0 ? topColor : bottomColor;
+
         v.Add(new Vertex(a, color));
         v.Add(new Vertex(b, color));
         v.Add(new Vertex(c, color));
