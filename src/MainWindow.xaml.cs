@@ -9,7 +9,7 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        _renderer = new Renderer(Panel);
+        _renderer = new Renderer(Panel, new Simulation(count: 100));
         Closed += (_, _) => _renderer.Dispose();
     }
 }
