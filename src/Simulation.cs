@@ -2,6 +2,8 @@ using System.Numerics;
 
 namespace Murmuration;
 
+public enum ClimbDirection { Neither, Left, Right }
+
 public struct Bird
 {
     public Vector3 Position;
@@ -9,6 +11,8 @@ public struct Bird
     public Vector3 Up;
     public float Speed;
     public float Mass;
+    public ClimbDirection Climb;
+    public float ClimbStrength;
 }
 
 public sealed class Simulation
@@ -19,12 +23,13 @@ public sealed class Simulation
     private const float CenterRadius = 10.0f;
 
     private readonly Vector3[] _newDirections;
+    private readonly Random _rng;
 
     public Bird[] Birds { get; }
 
     public Simulation(int count, int seed = 1)
     {
-        var rng = new Random(seed);
+        var rng = _rng = new Random(seed);
         Birds = new Bird[count];
         _newDirections = new Vector3[count];
 
@@ -41,8 +46,10 @@ public sealed class Simulation
                 Direction = Vector3.Normalize(dir),
                 Up = Vector3.UnitZ,
                 Position = new Vector3(Range(rng, -50, 50), Range(rng, -50, 50), Range(rng, 0, 50)),
-                Speed = Range(rng, 15, 20),
+                Speed = Range(rng, 15, 18),
                 Mass = Range(rng, 0.25f, 0.5f),
+                Climb = ClimbDirection.Neither,
+                ClimbStrength = Range(rng, 0.7f, 1.2f),
             };
         }
     }
@@ -78,7 +85,16 @@ public sealed class Simulation
                 alignment = Steer(b.Direction, birds[neighbor].Direction, maxAngle) - b.Direction;
             }
 
-            Vector3 sum = b.Direction + toCenter + toNeighbor + alignment;
+            Vector3 climbYaw = Vector3.Zero;
+            if (b.Direction.Z > 0f && b.Climb != ClimbDirection.Neither)
+            {
+                // Positive rotation about up turns left.
+                float yaw = maxAngle * b.ClimbStrength * (b.Climb == ClimbDirection.Left ? 1f : -1f);
+                var rotation = Quaternion.CreateFromAxisAngle(b.Up, yaw);
+                climbYaw = Vector3.Transform(b.Direction, rotation) - b.Direction;
+            }
+
+            Vector3 sum = b.Direction + toCenter + toNeighbor + alignment + climbYaw;
             _newDirections[i] = sum.LengthSquared() > 1e-12f ? Vector3.Normalize(sum) : b.Direction;
         }
 
@@ -91,6 +107,13 @@ public sealed class Simulation
             b.Up = ComputeUp(oldDir, newDir, b.Up, b.Speed, dt);
             b.Direction = newDir;
             b.Position += newDir * b.Speed * dt;
+
+            if (oldDir.Z <= 0f && newDir.Z > 0f)
+            {
+                double roll = _rng.NextDouble();
+                double subset = 0.4;
+                b.Climb = roll < subset ? ClimbDirection.Left : roll < (subset * 2) ? ClimbDirection.Right : ClimbDirection.Neither;
+            }
         }
     }
 

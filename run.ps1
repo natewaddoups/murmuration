@@ -1,3 +1,3 @@
 pushd src
-dotnet run
+dotnet run --no-restore
 popd
