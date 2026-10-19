@@ -16,6 +16,7 @@ public sealed class Simulation
     public static readonly Vector3 Center = new(0, 0, 25);
     private const float Gravity = 9.81f;
     private const float NeighborDistance = 1.0f;
+    private const float CenterRadius = 10.0f;
 
     private readonly Vector3[] _newDirections;
 
@@ -63,12 +64,21 @@ public sealed class Simulation
             ref readonly Bird b = ref birds[i];
             float maxAngle = MaxTurnRate(b.Speed) * dt;
 
-            Vector3 toCenter = Steer(b.Direction, Center - b.Position, maxAngle) - b.Direction;
-            Vector3 toNeighbor = Vector3.Zero;
-            if (TryGetNeighborTarget(i, out Vector3 target))
-                toNeighbor = Steer(b.Direction, target - b.Position, maxAngle) - b.Direction;
+            Vector3 toCenter = Vector3.Zero;
+            Vector3 offset = Center - b.Position;
+            float manhattan = Math.Abs(offset.X) + Math.Abs(offset.Y) + Math.Abs(offset.Z);
+            if (manhattan > CenterRadius)
+                toCenter = Steer(b.Direction, offset, maxAngle) - b.Direction;
 
-            Vector3 sum = b.Direction + toCenter + toNeighbor;
+            Vector3 toNeighbor = Vector3.Zero;
+            Vector3 alignment = Vector3.Zero;
+            if (TryGetNeighbor(i, out int neighbor, out Vector3 target))
+            {
+                toNeighbor = Steer(b.Direction, target - b.Position, maxAngle) - b.Direction;
+                alignment = Steer(b.Direction, birds[neighbor].Direction, maxAngle) - b.Direction;
+            }
+
+            Vector3 sum = b.Direction + toCenter + toNeighbor + alignment;
             _newDirections[i] = sum.LengthSquared() > 1e-12f ? Vector3.Normalize(sum) : b.Direction;
         }
 
@@ -85,10 +95,10 @@ public sealed class Simulation
     }
 
     // Target is 1 m from the nearest bird, on the line from this bird to that one.
-    private bool TryGetNeighborTarget(int index, out Vector3 target)
+    private bool TryGetNeighbor(int index, out int nearest, out Vector3 target)
     {
         target = default;
-        int nearest = -1;
+        nearest = -1;
         float best = float.MaxValue;
         Vector3 p = Birds[index].Position;
 
