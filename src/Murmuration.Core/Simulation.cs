@@ -46,7 +46,7 @@ public sealed class Simulation
                 Direction = Vector3.Normalize(dir),
                 Up = Vector3.UnitZ,
                 Position = new Vector3(Range(rng, -50, 50), Range(rng, -50, 50), Range(rng, 0, 50)),
-                Speed = Range(rng, 15, 18),
+                Speed = Range(rng, 3, 6),
                 Mass = Range(rng, 0.25f, 0.5f),
                 Climb = ClimbDirection.Neither,
                 ClimbStrength = Range(rng, 0.7f, 1.2f),

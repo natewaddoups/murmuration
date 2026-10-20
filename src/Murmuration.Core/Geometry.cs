@@ -52,6 +52,7 @@ public static class Geometry
                 Blue, Green);
         }
 
+        // Head
         AddTetrahedron(v,
             new Vector3(0, -0.015f, -0.01f),
             new Vector3(0, 0.015f, -0.01f),
@@ -59,9 +60,10 @@ public static class Geometry
             new Vector3(0.10f, 0, 0),
             White, MediumGray);
 
+        // Tail
         AddTetrahedron(v,
-            new Vector3(-0.10f, -0.025f, -0.0025f),
-            new Vector3(-0.10f, 0.025f, -0.0025f),
+            new Vector3(-0.10f, -0.050f, -0.0025f),
+            new Vector3(-0.10f, 0.050f, -0.0025f),
             new Vector3(-0.10f, 0, 0.0025f),
             Vector3.Zero,
             Blue, MediumGray);
