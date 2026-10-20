@@ -28,7 +28,7 @@ public sealed class FrameRunner
 
     private readonly Simulation _simulation;
     private readonly IGpuRenderer _renderer;
-    private readonly InstanceData[] _instances;
+    private InstanceData[] _instances;
     private double _lastTime = double.NaN;
     private double _fpsWindowStart;
     private int _fpsFrames;
@@ -52,11 +52,15 @@ public sealed class FrameRunner
             _lastTime = _fpsWindowStart = nowSeconds;
         }
 
-        float dt = Math.Min((float)(nowSeconds - _lastTime), MaxFrameDelta);
+        double frameDelta = nowSeconds - _lastTime;
+        float dt = Math.Min((float)frameDelta, MaxFrameDelta);
         _lastTime = nowSeconds;
-        if (dt > 0f && !Paused) _simulation.Step(dt);
+        int frameRate = frameDelta > 0 ? (int)(1.0 / frameDelta) : 60;
+        if (dt > 0f && !Paused) _simulation.Step(dt, frameRate);
 
         Bird[] birds = _simulation.Birds;
+        if (_instances.Length != birds.Length)
+            Array.Resize(ref _instances, birds.Length);
         for (int i = 0; i < birds.Length; i++)
         {
             _instances[i] = new InstanceData

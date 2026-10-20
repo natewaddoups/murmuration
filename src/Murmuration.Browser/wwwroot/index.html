@@ -7,8 +7,7 @@
     <script type="module" src="main.js"></script>
 </head>
 <body style="margin: 0; overflow: hidden; background: #000">
-    <!-- Avalonia's canvas is opaque, so it gets its own panel beside the WebGPU canvas. -->
-    <div id="out" style="position: fixed; top: 0; bottom: 0; left: 0; width: 200px"></div>
-    <canvas id="gpu" style="position: fixed; top: 0; bottom: 0; left: 200px; right: 0; width: calc(100% - 200px); height: 100%"></canvas>
+    <div id="out" style="position: fixed; inset: 0; pointer-events: none"></div>
+    <canvas id="gpu" style="position: fixed; inset: 0; width: 100%; height: 100%"></canvas>
 </body>
 </html>

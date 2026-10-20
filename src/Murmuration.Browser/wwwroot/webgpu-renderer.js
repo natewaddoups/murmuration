@@ -103,7 +103,7 @@ export function render(instanceBytes, viewProjBytes, instanceCount) {
     const pass = encoder.beginRenderPass({
         colorAttachments: [{
             view: context.getCurrentTexture().createView(),
-            clearValue: { r: 0.05, g: 0.08, b: 0.15, a: 1 },
+            clearValue: { r: 0, g: 0, b: 0, a: 1 },
             loadOp: 'clear',
             storeOp: 'store',
         }],

@@ -10,14 +10,6 @@ namespace Murmuration.Browser;
 
 public class App : Application
 {
-    public static readonly TextBlock FpsText = new()
-    {
-        Foreground = Brushes.White,
-        Margin = new Thickness(12),
-        HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left,
-        VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top,
-    };
-
     public static volatile bool Paused;
 
     public override void Initialize() => Styles.Add(new FluentTheme());
@@ -26,7 +18,7 @@ public class App : Application
     {
         if (ApplicationLifetime is ISingleViewApplicationLifetime singleView)
         {
-            var view = new Grid { Background = Brushes.Black, Focusable = true, Children = { FpsText } };
+            var view = new Grid { Background = Brushes.Black, Focusable = true };
             view.KeyDown += (_, e) =>
             {
                 if (e.Key == Key.Space) Paused = !Paused;
@@ -45,8 +37,7 @@ internal static class Program
         await AppBuilder.Configure<App>().StartBrowserAppAsync("out");
 
         var renderer = await WebGpuBrowserRenderer.CreateAsync("gpu");
-        var runner = new FrameRunner(new Simulation(count: 600), renderer);
-        runner.FpsUpdated += fps => App.FpsText.Text = $"{fps:F0} FPS";
+        var runner = new FrameRunner(new Simulation(count: 20), renderer);
 
         void OnFrame(double ms)
         {

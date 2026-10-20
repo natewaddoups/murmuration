@@ -23,10 +23,12 @@ public sealed class Simulation
     private const float CenterRadius = 10.0f;
     private const float BankTimeConstant = 0.2f;
 
-    private readonly Vector3[] _newDirections;
+    private Vector3[] _newDirections;
     private readonly Random _rng;
+    private float _timeSinceLastBird;
+    private int _lowFrameRateUpdates;
 
-    public Bird[] Birds { get; }
+    public Bird[] Birds { get; private set; }
 
     public Simulation(int count, int seed = 1)
     {
@@ -35,24 +37,7 @@ public sealed class Simulation
         _newDirections = new Vector3[count];
 
         for (int i = 0; i < count; i++)
-        {
-            Vector3 dir;
-            do
-            {
-                dir = new Vector3(Range(rng, -1, 1), Range(rng, -1, 1), Range(rng, -1, 1));
-            } while (dir.LengthSquared() < 1e-4f);
-
-            Birds[i] = new Bird
-            {
-                Direction = Vector3.Normalize(dir),
-                Up = Vector3.UnitZ,
-                Position = new Vector3(Range(rng, -50, 50), Range(rng, -50, 50), Range(rng, 0, 50)),
-                Speed = Range(rng, 3, 4),
-                Mass = Range(rng, 0.25f, 0.5f),
-                Climb = ClimbDirection.Neither,
-                ClimbStrength = Range(rng, 0.7f, 1.2f),
-            };
-        }
+            Birds[i] = CreateBird(rng, true);
     }
 
     // 180 deg/s at 15 m/s falling linearly to 135 deg/s at 20 m/s.
@@ -62,7 +47,72 @@ public sealed class Simulation
         return Math.Max(0f, degrees) * (MathF.PI / 180f);
     }
 
-    public void Step(float dt)
+    public void Step(float dt, int frameRate)
+    {
+        AdjustPopulationSize(frameRate, dt);
+        Think(dt);
+        Move(dt);
+    }
+
+    private void AdjustPopulationSize(int frameRate, float dt)
+    {
+        if (frameRate < 60)
+        {
+            _lowFrameRateUpdates++;
+            if (_lowFrameRateUpdates >= 3 && Birds.Length > 10)
+                ResizePopulation(Math.Max(10, Birds.Length - (60 - frameRate)));
+        }
+        else
+        {
+            _lowFrameRateUpdates = 0;
+        }
+
+        if (frameRate > 120 && dt > 0f)
+        {
+            _timeSinceLastBird += dt;
+            int birdsToAdd = (int)_timeSinceLastBird;
+            if (birdsToAdd > 0)
+            {
+                _timeSinceLastBird -= birdsToAdd;
+                int firstNewBird = Birds.Length;
+                ResizePopulation(firstNewBird + birdsToAdd);
+                for (int i = firstNewBird; i < Birds.Length; i++)
+                    Birds[i] = CreateBird(_rng, false);
+            }
+        }
+    }
+
+    private void ResizePopulation(int newSize)
+    {
+        Bird[] birds = Birds;
+        Array.Resize(ref birds, newSize);
+        Birds = birds;
+        Array.Resize(ref _newDirections, newSize);
+    }
+
+    private static Bird CreateBird(Random rng, bool startup)
+    {
+        Vector3 dir;
+        do
+        {
+            dir = new Vector3(Range(rng, -1, 1), Range(rng, -1, 1), Range(rng, -1, 1));
+        } while (dir.LengthSquared() < 1e-4f);
+
+        return new Bird
+        {
+            Direction = Vector3.Normalize(dir),
+            Up = Vector3.UnitZ,
+            Position = startup ? 
+                new Vector3(Range(rng, -50, 50), Range(rng, -50, 50), Range(rng, 0, 50)) :
+                new Vector3(Range(rng, 30, 50), Range(rng, 40, 50), 0),
+            Speed = Range(rng, 3, 4),
+            Mass = Range(rng, 0.25f, 0.5f),
+            Climb = ClimbDirection.Neither,
+            ClimbStrength = Range(rng, 0.7f, 1.2f),
+        };
+    }
+
+    private void Think(float dt)
     {
         var birds = Birds;
 
@@ -104,7 +154,11 @@ public sealed class Simulation
             Vector3 sum = b.Direction + toCenter + toNeighbor + alignment + climbYaw;
             _newDirections[i] = sum.LengthSquared() > 1e-12f ? Vector3.Normalize(sum) : b.Direction;
         }
+    }
 
+    private void Move(float dt)
+    {
+        var birds = Birds;
         for (int i = 0; i < birds.Length; i++)
         {
             ref Bird b = ref birds[i];
