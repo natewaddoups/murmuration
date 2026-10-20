@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="Murmuration.Browser/Murmuration.Browser.csproj" />
+  <Project Path="Murmuration.Core/Murmuration.Core.csproj" />
+  <Project Path="Murmuration.Desktop/Murmuration.Desktop.csproj" />
+</Solution>

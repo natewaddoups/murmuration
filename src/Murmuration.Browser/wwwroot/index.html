@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Murmuration</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script type="module" src="main.js"></script>
+</head>
+<body style="margin: 0; overflow: hidden; background: #000">
+    <!-- Avalonia's canvas is opaque, so it gets its own panel beside the WebGPU canvas. -->
+    <div id="out" style="position: fixed; top: 0; bottom: 0; left: 0; width: 200px"></div>
+    <canvas id="gpu" style="position: fixed; top: 0; bottom: 0; left: 200px; right: 0; width: calc(100% - 200px); height: 100%"></canvas>
+</body>
+</html>

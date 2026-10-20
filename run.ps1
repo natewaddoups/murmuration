@@ -1,3 +1,3 @@
-pushd src
-dotnet run --no-restore
-popd
+param([ValidateSet('Desktop', 'Browser')][string]$Target = 'Desktop')
+
+dotnet run --project "$PSScriptRoot/src/Murmuration.$Target"

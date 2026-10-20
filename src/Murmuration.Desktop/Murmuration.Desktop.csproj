@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Murmuration.Desktop</RootNamespace>
+    <AssemblyName>Murmuration</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NoWarn>$(NoWarn);CS0618;CS9193</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.4" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.4" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4" />
+    <PackageReference Include="Silk.NET.WebGPU" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.WebGPU.Native.WGPU" Version="2.23.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Murmuration.Core\Murmuration.Core.csproj" />
+  </ItemGroup>
+</Project>
