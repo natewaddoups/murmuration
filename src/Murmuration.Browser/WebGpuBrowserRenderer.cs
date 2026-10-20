@@ -16,7 +16,7 @@ internal sealed partial class WebGpuBrowserRenderer : IGpuRenderer
 
     public static async Task<WebGpuBrowserRenderer> CreateAsync(string canvasId)
     {
-        await JSHost.ImportAsync("webgpu-renderer", "/webgpu-renderer.js");
+        await JSHost.ImportAsync("webgpu-renderer", "../webgpu-renderer.js");
         await InitDevice(canvasId);
 
         Vertex[] bird = Geometry.CreateBird();
