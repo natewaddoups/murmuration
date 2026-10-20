@@ -32,7 +32,10 @@ public static class Geometry
     private static readonly Vector3 Green = new(0.2f, 0.7f, 0.25f);
     private static readonly Vector3 White = new(1f, 1f, 1f);
     private static readonly Vector3 MediumGray = new(0.5f, 0.5f, 0.5f);
-    private static readonly Vector3 GroundColor = new(0.15f, 0.55f, 0.2f);
+    
+    // Set ground color to black, to hide it for now.
+    private static readonly Vector3 GroundColor = new(0.0f, 0.0f, 0.0f);
+    //private static readonly Vector3 GroundColor = new(0.15f, 0.55f, 0.2f);
 
     // Bird local axes: x forward, y left, z up; units are meters.
     public static Vertex[] CreateBird()

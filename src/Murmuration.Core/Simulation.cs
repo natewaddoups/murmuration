@@ -46,7 +46,7 @@ public sealed class Simulation
                 Direction = Vector3.Normalize(dir),
                 Up = Vector3.UnitZ,
                 Position = new Vector3(Range(rng, -50, 50), Range(rng, -50, 50), Range(rng, 0, 50)),
-                Speed = Range(rng, 3, 6),
+                Speed = Range(rng, 3, 4),
                 Mass = Range(rng, 0.25f, 0.5f),
                 Climb = ClimbDirection.Neither,
                 ClimbStrength = Range(rng, 0.7f, 1.2f),
@@ -73,30 +73,33 @@ public sealed class Simulation
 
             Vector3 toCenter = Vector3.Zero;
             Vector3 offset = Center - b.Position;
-
             Vector3 toNeighbor = Vector3.Zero;
             Vector3 alignment = Vector3.Zero;
             Vector3 climbYaw = Vector3.Zero;
+
             if (b.Direction.Z > 0f && b.Climb != ClimbDirection.Neither)
             {
-                // Positive rotation about up turns left.
+                // Spread out when climbing. Positive rotation about the up-vector turns left.
                 float yaw = maxAngle * b.ClimbStrength * (b.Climb == ClimbDirection.Left ? 1f : -1f);
                 var rotation = Quaternion.CreateFromAxisAngle(b.Up, yaw);
                 climbYaw = Vector3.Transform(b.Direction, rotation) - b.Direction;
             } 
             else
             {
+                // Aim for center when descending.
                 float manhattan = Math.Abs(offset.X) + Math.Abs(offset.Y) + Math.Abs(offset.Z);
                 if (manhattan > CenterRadius)
                     toCenter = Steer(b.Direction, offset, maxAngle) - b.Direction;
             }
 
+            // Converge towards the nearest neighbor and align with its direction.
             if (TryGetNeighbor(i, out int neighbor, out Vector3 target))
             {
                 toNeighbor = Steer(b.Direction, target - b.Position, maxAngle) - b.Direction;
                 alignment = Steer(b.Direction, birds[neighbor].Direction, maxAngle) - b.Direction;
             }
 
+            // Combine all steering influences.
             Vector3 sum = b.Direction + toCenter + toNeighbor + alignment + climbYaw;
             _newDirections[i] = sum.LengthSquared() > 1e-12f ? Vector3.Normalize(sum) : b.Direction;
         }

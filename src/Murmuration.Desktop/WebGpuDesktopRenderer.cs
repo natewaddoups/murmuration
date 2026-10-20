@@ -209,7 +209,7 @@ public sealed unsafe class WebGpuDesktopRenderer : IGpuRenderer
             View = view,
             LoadOp = LoadOp.Clear,
             StoreOp = StoreOp.Store,
-            ClearValue = new Color { R = 0.05, G = 0.08, B = 0.15, A = 1 },
+            ClearValue = new Color { R = 0.0, G = 0.0, B = 0.0, A = 1 },
         };
         var depth = new RenderPassDepthStencilAttachment
         {
