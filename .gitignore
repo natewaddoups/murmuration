@@ -1,3 +1,5 @@
+.venv/
+.vscode/
 bin/
 obj/
 .vs/
