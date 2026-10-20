@@ -12,8 +12,11 @@ public sealed class GpuHost : NativeControlHost
     private IntPtr _hwnd;
     private Thread? _thread;
     private volatile bool _running;
+    private volatile bool _paused;
 
     public GpuHost(Simulation simulation) => _simulation = simulation;
+
+    public void TogglePause() => _paused = !_paused;
 
     // Raised on the render thread.
     public event Action<double>? FpsUpdated;
@@ -50,6 +53,7 @@ public sealed class GpuHost : NativeControlHost
 
         while (_running)
         {
+            runner.Paused = _paused;
             GetClientRect(_hwnd, out RECT rect);
             runner.Frame(clock.Elapsed.TotalSeconds, Math.Max(1, rect.Right), Math.Max(1, rect.Bottom));
         }

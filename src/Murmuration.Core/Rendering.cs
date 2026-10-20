@@ -40,6 +40,8 @@ public sealed class FrameRunner
         _instances = new InstanceData[simulation.Birds.Length];
     }
 
+    public volatile bool Paused;
+
     // Raised from Frame about twice a second.
     public event Action<double>? FpsUpdated;
 
@@ -52,7 +54,7 @@ public sealed class FrameRunner
 
         float dt = Math.Min((float)(nowSeconds - _lastTime), MaxFrameDelta);
         _lastTime = nowSeconds;
-        if (dt > 0f) _simulation.Step(dt);
+        if (dt > 0f && !Paused) _simulation.Step(dt);
 
         Bird[] birds = _simulation.Birds;
         for (int i = 0; i < birds.Length; i++)

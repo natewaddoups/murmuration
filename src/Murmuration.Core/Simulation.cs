@@ -21,6 +21,7 @@ public sealed class Simulation
     private const float Gravity = 9.81f;
     private const float NeighborDistance = 1.0f;
     private const float CenterRadius = 10.0f;
+    private const float BankTimeConstant = 0.2f;
 
     private readonly Vector3[] _newDirections;
     private readonly Random _rng;
@@ -186,7 +187,14 @@ public sealed class Simulation
             up += Vector3.Normalize(inward) * centripetal;
 
         up -= newDir * Vector3.Dot(up, newDir);
-        return up.LengthSquared() > 1e-12f ? Vector3.Normalize(up) : previousUp;
+        if (up.LengthSquared() < 1e-12f) return previousUp;
+        up = Vector3.Normalize(up);
+
+        // Exponential smoothing so the bank angle can't flip between frames.
+        float alpha = 1f - MathF.Exp(-dt / BankTimeConstant);
+        Vector3 smoothed = Vector3.Lerp(previousUp, up, alpha);
+        smoothed -= newDir * Vector3.Dot(smoothed, newDir);
+        return smoothed.LengthSquared() > 1e-12f ? Vector3.Normalize(smoothed) : up;
     }
 
     private static float Range(Random rng, float min, float max) =>
