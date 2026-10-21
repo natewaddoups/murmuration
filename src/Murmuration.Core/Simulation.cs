@@ -63,18 +63,19 @@ public sealed class Simulation
 
     private void AdjustPopulationSize(int frameRate, float dt)
     {
-        if (frameRate < 60)
+        const int minFrameRate = 55;
+        if (frameRate < minFrameRate)
         {
             _lowFrameRateUpdates++;
             if (_lowFrameRateUpdates >= 3 && Birds.Length > 10)
-                ResizePopulation(Math.Max(10, Birds.Length - (60 - frameRate)));
+                ResizePopulation(Math.Max(10, Birds.Length - (minFrameRate - frameRate)));
         }
         else
         {
             _lowFrameRateUpdates = 0;
         }
 
-        if (frameRate > 120 && dt > 0f)
+        if (frameRate > 59 && dt > 0f)
         {
             _timeSinceLastBird += dt;
             int birdsToAdd = (int)_timeSinceLastBird;
