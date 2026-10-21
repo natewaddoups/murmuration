@@ -2,8 +2,8 @@ $ErrorActionPreference = 'Stop'
 $out = "$PSScriptRoot/obj/demo-publish"
 $demo = "$PSScriptRoot/demo"
 
-Remove-ChildItem $out -Recurse -Force -ErrorAction SilentlyContinue
-Remove-ChildItem $demo -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item $out -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item $demo -Recurse -Force -ErrorAction SilentlyContinue
 mkdir $demo
 
 dotnet publish "$PSScriptRoot/src/Murmuration.Browser" -c Release -o $out
