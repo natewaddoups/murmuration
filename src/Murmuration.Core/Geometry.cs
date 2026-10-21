@@ -43,7 +43,7 @@ public static class Geometry
         var v = new List<Vertex>();
 
         const float wingHalfWidth = 0.025f;
-        const float wingHalfHeight = 0.005f;
+        const float wingHalfHeight = 0.010f;
         const float wingLength = 0.30f;
         foreach (float side in new[] { 1f, -1f })
         {

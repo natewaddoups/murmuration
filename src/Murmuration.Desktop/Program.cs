@@ -15,7 +15,7 @@ public class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            var host = new GpuHost(new Simulation(count: 600));
+            var host = new GpuHost(new Simulation(count: 300));
             var window = new Window { Title = "Murmuration", Width = 1280, Height = 720, WindowState = WindowState.Maximized, Content = host };
             host.FpsUpdated += fps => Dispatcher.UIThread.Post(() => window.Title = $"Murmuration - {fps:F0} FPS");
             window.KeyDown += (_, e) =>

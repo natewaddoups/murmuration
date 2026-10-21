@@ -20,6 +20,7 @@ public sealed class Simulation
     public static readonly Vector3 Center = new(0, 0, 25);
     private const float Gravity = 9.81f;
     private const float NeighborDistance = 1.0f;
+    private const float NeighborRange = 20.0f;
     private const float CenterRadius = 10.0f;
     private const float BankTimeConstant = 0.2f;
 
@@ -127,6 +128,13 @@ public sealed class Simulation
             Vector3 toNeighbor = Vector3.Zero;
             Vector3 alignment = Vector3.Zero;
             Vector3 climbYaw = Vector3.Zero;
+            Vector3 toUp = Vector3.Zero;
+            Vector3 toDown = Vector3.Zero;
+
+            if (b.Position.Z < 10f)
+                toUp = Steer(b.Direction, Vector3.UnitZ, maxAngle) - b.Direction;
+            else if (b.Position.Z > 40f)
+                toDown = Steer(b.Direction, -Vector3.UnitZ, maxAngle) - b.Direction;
 
             if (b.Direction.Z > 0f && b.Climb != ClimbDirection.Neither)
             {
@@ -137,10 +145,10 @@ public sealed class Simulation
             } 
             else
             {
-                // Aim for center when descending.
+                // Aim the center when descending and not close to the center.
                 float manhattan = Math.Abs(offset.X) + Math.Abs(offset.Y) + Math.Abs(offset.Z);
                 if (manhattan > CenterRadius)
-                    toCenter = Steer(b.Direction, offset, maxAngle) - b.Direction;
+                    toCenter = Steer(b.Direction, offset, maxAngle/2) - b.Direction;
             }
 
             // Converge towards the nearest neighbor and align with its direction.
@@ -151,7 +159,7 @@ public sealed class Simulation
             }
 
             // Combine all steering influences.
-            Vector3 sum = b.Direction + toCenter + toNeighbor + alignment + climbYaw;
+            Vector3 sum = b.Direction + toCenter + toNeighbor + alignment + climbYaw + toUp + toDown;
             _newDirections[i] = sum.LengthSquared() > 1e-12f ? Vector3.Normalize(sum) : b.Direction;
         }
     }
@@ -178,18 +186,28 @@ public sealed class Simulation
         }
     }
 
-    // Target is 1 m from the nearest bird, on the line from this bird to that one.
+    // Target is 1 m from the nearest bird ahead of this one, on the line from this bird to that one.
     private bool TryGetNeighbor(int index, out int nearest, out Vector3 target)
     {
         target = default;
         nearest = -1;
         float best = float.MaxValue;
         Vector3 p = Birds[index].Position;
+        Vector3 forward = Birds[index].Direction;
 
         for (int j = 0; j < Birds.Length; j++)
         {
             if (j == index) continue;
-            float d = Vector3.DistanceSquared(p, Birds[j].Position);
+            
+            Vector3 delta = Birds[j].Position - p;
+
+            // Ignore birds that are too far away. (I can't decide whether this gives better or worse results.)
+            float d = delta.LengthSquared();
+            // if (d > NeighborRange * NeighborRange) continue;
+
+            // Only look forward. Adding this condition made the flock much more cohesive.
+            if (Vector3.Dot(delta, forward) <= 0f) continue;
+
             if (d < best)
             {
                 best = d;
