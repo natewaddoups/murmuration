@@ -10,6 +10,7 @@ public struct Bird
     public Vector3 Direction;
     public Vector3 Up;
     public float Speed;
+    public float PreferredSpeed;
     public float Mass;
     public ClimbDirection Climb;
     public float ClimbStrength;
@@ -23,6 +24,11 @@ public sealed class Simulation
     private const float NeighborRange = 20.0f;
     private const float CenterRadius = 10.0f;
     private const float BankTimeConstant = 0.2f;
+    private const float SpeedRelaxRate = 1.0f;
+    private const float SlopeSpeedGain = 0.5f;
+    private const float StallSpeed = 2.1f;
+    private const float MaxSpeed = 5.0f;
+    private static readonly float LevelSlope = MathF.Sin(20f * MathF.PI / 180f);
 
     private Vector3[] _newDirections;
     private readonly Random _rng;
@@ -99,6 +105,7 @@ public sealed class Simulation
             dir = new Vector3(Range(rng, -1, 1), Range(rng, -1, 1), Range(rng, -1, 1));
         } while (dir.LengthSquared() < 1e-4f);
 
+        float preferredSpeed = Range(rng, 3, 4);
         return new Bird
         {
             Direction = Vector3.Normalize(dir),
@@ -106,7 +113,8 @@ public sealed class Simulation
             Position = startup ? 
                 new Vector3(Range(rng, -50, 50), Range(rng, -50, 50), Range(rng, 0, 50)) :
                 new Vector3(Range(rng, 30, 50), Range(rng, 40, 50), 0),
-            Speed = Range(rng, 3, 4),
+            Speed = preferredSpeed,
+            PreferredSpeed = preferredSpeed,
             Mass = Range(rng, 0.25f, 0.5f),
             Climb = ClimbDirection.Neither,
             ClimbStrength = Range(rng, 0.7f, 1.2f),
@@ -131,12 +139,29 @@ public sealed class Simulation
             Vector3 toUp = Vector3.Zero;
             Vector3 toDown = Vector3.Zero;
 
-            if (b.Position.Z < 10f)
-                toUp = Steer(b.Direction, Vector3.UnitZ, maxAngle) - b.Direction;
-            else if (b.Position.Z > 40f)
-                toDown = Steer(b.Direction, -Vector3.UnitZ, maxAngle) - b.Direction;
+            bool stalled = b.Speed < StallSpeed;
+            Vector3 toLevel = Vector3.Zero;
 
-            if (b.Direction.Z > 0f && b.Climb != ClimbDirection.Neither)
+            if (stalled)
+            {
+                var level = new Vector3(b.Direction.X, b.Direction.Y, 0f);
+                if (level.LengthSquared() < 1e-6f) level = Vector3.UnitX;
+                toLevel = Steer(b.Direction, level, maxAngle) - b.Direction;
+            }
+            else if (b.Position.Z < 10f)
+            {
+                toUp = Steer(b.Direction, Vector3.UnitZ, maxAngle) - b.Direction;
+            }
+            else if (b.Position.Z > 40f)
+            {
+                toDown = Steer(b.Direction, -Vector3.UnitZ, maxAngle) - b.Direction;
+            }
+
+            if (stalled)
+            {
+                // Slow birds only steer sideways for cohesion.
+            }
+            else if (b.Direction.Z > 0f && b.Climb != ClimbDirection.Neither)
             {
                 // Spread out when climbing. Positive rotation about the up-vector turns left.
                 float yaw = maxAngle * b.ClimbStrength * (b.Climb == ClimbDirection.Left ? 1f : -1f);
@@ -156,10 +181,15 @@ public sealed class Simulation
             {
                 toNeighbor = Steer(b.Direction, target - b.Position, maxAngle) - b.Direction;
                 alignment = Steer(b.Direction, birds[neighbor].Direction, maxAngle) - b.Direction;
+                if (stalled)
+                {
+                    toNeighbor.Z = 0f;
+                    alignment.Z = 0f;
+                }
             }
 
             // Combine all steering influences.
-            Vector3 sum = b.Direction + toCenter + toNeighbor + alignment + climbYaw + toUp + toDown;
+            Vector3 sum = b.Direction + toCenter + toNeighbor + alignment + climbYaw + toUp + toDown + toLevel;
             _newDirections[i] = sum.LengthSquared() > 1e-12f ? Vector3.Normalize(sum) : b.Direction;
         }
     }
@@ -172,6 +202,17 @@ public sealed class Simulation
             ref Bird b = ref birds[i];
             Vector3 oldDir = b.Direction;
             Vector3 newDir = _newDirections[i];
+
+            if (MathF.Abs(newDir.Z) <= LevelSlope)
+            {
+                b.Speed += (b.PreferredSpeed - b.Speed) * (1f - MathF.Exp(-SpeedRelaxRate * dt));
+            }
+            else
+            {
+                b.Speed -= SlopeSpeedGain * b.Speed * newDir.Z * dt; // climbing slows, diving speeds up
+            }
+
+            b.Speed = Math.Clamp(b.Speed, 0f, MaxSpeed);
 
             b.Up = ComputeUp(oldDir, newDir, b.Up, b.Speed, dt);
             b.Direction = newDir;
