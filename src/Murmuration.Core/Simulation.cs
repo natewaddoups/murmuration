@@ -7,8 +7,9 @@ public enum ClimbDirection { Neither, Left, Right }
 public struct Bird
 {
     public Vector3 Position;
-    public Vector3 Direction;
-    public Vector3 Up;
+    public Quaternion Orientation;
+    public Vector3 Direction => Vector3.Transform(Vector3.UnitX, Orientation);
+    public Vector3 Up => Vector3.Transform(Vector3.UnitZ, Orientation);
     public float Speed;
     public float PreferredSpeed;
     public float Mass;
@@ -100,17 +101,13 @@ public sealed class Simulation
 
     private static Bird CreateBird(Random rng, bool startup)
     {
-        Vector3 dir;
-        do
-        {
-            dir = new Vector3(Range(rng, -1, 1), Range(rng, -1, 1), Range(rng, -1, 1));
-        } while (dir.LengthSquared() < 1e-4f);
+        Vector3 dir = new Vector3(Range(rng, -1, 1), Range(rng, -1, 1), Range(rng, -1, 1));
 
         float preferredSpeed = Range(rng, 3, 4);
+        Vector3 direction = Vector3.Normalize(dir);
         return new Bird
         {
-            Direction = Vector3.Normalize(dir),
-            Up = Vector3.UnitZ,
+            Orientation = CreateOrientation(direction, Vector3.UnitZ),
             Position = startup ? 
                 new Vector3(Range(rng, -50, 50), Range(rng, -50, 50), Range(rng, 0, 50)) :
                 new Vector3(Range(rng, 30, 50), Range(rng, 40, 50), 0),
@@ -215,8 +212,8 @@ public sealed class Simulation
 
             b.Speed = Math.Clamp(b.Speed, 0f, MaxSpeed);
 
-            b.Up = ComputeUp(oldDir, newDir, b.Up, b.Speed, dt);
-            b.Direction = newDir;
+            Vector3 newUp = ComputeUp(oldDir, newDir, b.Up, b.Speed, dt);
+            b.Orientation = CreateOrientation(newDir, newUp);
             b.Position += newDir * b.Speed * dt;
 
             if (oldDir.Z <= 0f && newDir.Z > 0f)
@@ -284,6 +281,27 @@ public sealed class Simulation
 
         var rotation = Quaternion.CreateFromAxisAngle(axis, Math.Min(angle, maxAngle));
         return Vector3.Normalize(Vector3.Transform(dir, rotation));
+    }
+
+    private static Quaternion CreateOrientation(Vector3 direction, Vector3 up)
+    {
+        Vector3 forward = Vector3.Normalize(direction);
+        up -= forward * Vector3.Dot(up, forward);
+        if (up.LengthSquared() < 1e-12f)
+        {
+            up = Math.Abs(forward.Z) < 0.9f ? Vector3.UnitZ : Vector3.UnitX;
+            up -= forward * Vector3.Dot(up, forward);
+        }
+        up = Vector3.Normalize(up);
+        Vector3 left = Vector3.Normalize(Vector3.Cross(up, forward));
+        up = Vector3.Cross(forward, left);
+
+        var matrix = new Matrix4x4(
+            forward.X, forward.Y, forward.Z, 0f,
+            left.X, left.Y, left.Z, 0f,
+            up.X, up.Y, up.Z, 0f,
+            0f, 0f, 0f, 1f);
+        return Quaternion.CreateFromRotationMatrix(matrix);
     }
 
     // Tilts "up" so the net of gravity and centripetal acceleration lies along it.
