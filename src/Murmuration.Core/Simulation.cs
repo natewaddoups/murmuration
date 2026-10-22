@@ -32,6 +32,8 @@ public sealed class Simulation
     private static readonly float LevelSlope = MathF.Sin(20f * MathF.PI / 180f);
 
     private Vector3[] _newDirections;
+    private Vector3[] _directions = [];
+    private float[,] _distances = new float[0, 0]; // squared distances between birds
     private readonly Random _rng;
     private float _timeSinceLastBird;
     private int _lowFrameRateUpdates;
@@ -122,11 +124,13 @@ public sealed class Simulation
     private void Think(float dt)
     {
         var birds = Birds;
+        FillDistances();
 
         // Directions are computed from the previous positions before anything moves.
         for (int i = 0; i < birds.Length; i++)
         {
             ref readonly Bird b = ref birds[i];
+            Vector3 dir = _directions[i];
             float maxAngle = MaxTurnRate(b.Speed) * dt;
 
             Vector3 toCenter = Vector3.Zero;
@@ -142,43 +146,43 @@ public sealed class Simulation
 
             if (stalled)
             {
-                var level = new Vector3(b.Direction.X, b.Direction.Y, 0f);
+                var level = new Vector3(dir.X, dir.Y, 0f);
                 if (level.LengthSquared() < 1e-6f) level = Vector3.UnitX;
-                toLevel = Steer(b.Direction, level, maxAngle) - b.Direction;
+                toLevel = Steer(dir, level, maxAngle) - dir;
             }
             else if (b.Position.Z < 10f)
             {
-                toUp = Steer(b.Direction, Vector3.UnitZ, maxAngle) - b.Direction;
+                toUp = Steer(dir, Vector3.UnitZ, maxAngle) - dir;
             }
             else if (b.Position.Z > 40f)
             {
-                toDown = Steer(b.Direction, -Vector3.UnitZ, maxAngle) - b.Direction;
+                toDown = Steer(dir, -Vector3.UnitZ, maxAngle) - dir;
             }
 
             if (stalled)
             {
                 // Slow birds only steer sideways for cohesion.
             }
-            else if (b.Direction.Z > 0f && b.Climb != ClimbDirection.Neither)
+            else if (dir.Z > 0f && b.Climb != ClimbDirection.Neither)
             {
                 // Spread out when climbing. Positive rotation about the up-vector turns left.
                 float yaw = maxAngle * b.ClimbStrength * (b.Climb == ClimbDirection.Left ? 1f : -1f);
                 var rotation = Quaternion.CreateFromAxisAngle(b.Up, yaw);
-                climbYaw = Vector3.Transform(b.Direction, rotation) - b.Direction;
+                climbYaw = Vector3.Transform(dir, rotation) - dir;
             } 
             else
             {
                 // Aim the center when descending and not close to the center.
                 float manhattan = Math.Abs(offset.X) + Math.Abs(offset.Y) + Math.Abs(offset.Z);
                 if (manhattan > CenterRadius)
-                    toCenter = Steer(b.Direction, offset, maxAngle/2) - b.Direction;
+                    toCenter = Steer(dir, offset, maxAngle/2) - dir;
             }
 
             // Converge towards the nearest neighbor and align with its direction.
             if (TryGetNeighbor(i, out int neighbor, out Vector3 target))
             {
-                toNeighbor = Steer(b.Direction, target - b.Position, maxAngle) - b.Direction;
-                alignment = Steer(b.Direction, birds[neighbor].Direction, maxAngle) - b.Direction;
+                toNeighbor = Steer(dir, target - b.Position, maxAngle) - dir;
+                alignment = Steer(dir, _directions[neighbor], maxAngle) - dir;
                 if (stalled)
                 {
                     toNeighbor.Z = 0f;
@@ -187,8 +191,31 @@ public sealed class Simulation
             }
 
             // Combine all steering influences.
-            Vector3 sum = b.Direction + toCenter + toNeighbor + alignment + climbYaw + toUp + toDown + toLevel;
-            _newDirections[i] = sum.LengthSquared() > 1e-12f ? Vector3.Normalize(sum) : b.Direction;
+            Vector3 sum = dir + toCenter + toNeighbor + alignment + climbYaw + toUp + toDown + toLevel;
+            _newDirections[i] = sum.LengthSquared() > 1e-12f ? Vector3.Normalize(sum) : dir;
+        }
+    }
+
+    private void FillDistances()
+    {
+        var birds = Birds;
+        int n = birds.Length;
+        if (_distances.GetLength(0) != n)
+        {
+            _distances = new float[n, n];
+            _directions = new Vector3[n];
+        }
+
+        for (int i = 0; i < n; i++)
+        {
+            _directions[i] = birds[i].Direction;
+            Vector3 p = birds[i].Position;
+            for (int j = i + 1; j < n; j++)
+            {
+                float d = (birds[j].Position - p).LengthSquared();
+                _distances[i, j] = d;
+                _distances[j, i] = d;
+            }
         }
     }
 
@@ -232,26 +259,23 @@ public sealed class Simulation
         nearest = -1;
         float best = float.MaxValue;
         Vector3 p = Birds[index].Position;
-        Vector3 forward = Birds[index].Direction;
+        Vector3 forward = _directions[index];
 
         for (int j = 0; j < Birds.Length; j++)
         {
             if (j == index) continue;
-            
-            Vector3 delta = Birds[j].Position - p;
 
             // Ignore birds that are too far away. (I can't decide whether this gives better or worse results.)
-            float d = delta.LengthSquared();
+            float d = _distances[index, j];
             // if (d > NeighborRange * NeighborRange) continue;
 
-            // Only look forward. Adding this condition made the flock much more cohesive.
-            if (Vector3.Dot(delta, forward) <= 0f) continue;
+            if (d >= best) continue;
 
-            if (d < best)
-            {
-                best = d;
-                nearest = j;
-            }
+            // Only look forward. Adding this condition made the flock much more cohesive.
+            if (Vector3.Dot(Birds[j].Position - p, forward) <= 0f) continue;
+
+            best = d;
+            nearest = j;
         }
 
         if (nearest < 0 || best < 1e-12f) return false;
