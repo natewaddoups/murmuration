@@ -15,7 +15,7 @@ public class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            var simulation = new Simulation(count: 300);
+            var simulation = new Simulation(count: 100);
             var host = new GpuHost(simulation);
             var window = new Window { Title = "Murmuration", Width = 1280, Height = 720, WindowState = WindowState.Maximized, Content = host };
             host.FpsUpdated += fps => Dispatcher.UIThread.Post(() => window.Title = $"Murmuration - {simulation.Birds.Length} birds - {fps:F0} FPS");

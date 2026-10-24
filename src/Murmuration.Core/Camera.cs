@@ -4,8 +4,8 @@ namespace Murmuration;
 
 public static class Camera
 {
-    private static readonly Vector3 Eye = new(-15, -15, 25);
-    private static readonly Vector3 Target = new(0, 0, 25);
+    private static readonly Vector3 Eye = new(-10, -10, 0);
+    private static readonly Vector3 Target = Simulation.Center;
 
     // Horizontal FOV in radians
     private const float HorizontalFov = 60f * MathF.PI / 180f;
