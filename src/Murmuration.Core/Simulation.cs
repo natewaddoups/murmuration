@@ -60,11 +60,25 @@ public sealed class Simulation
             Birds[i] = CreateBird(rng, true);
     }
 
-    // 180 deg/s at 15 m/s falling linearly to 135 deg/s at 20 m/s.
-    public static float MaxTurnRate(float speed)
+    private static Bird CreateBird(Random rng, bool startup)
     {
-        float degrees = 180f - 9f * (speed - 15f);
-        return Math.Max(0f, degrees) * (MathF.PI / 180f);
+        Vector3 dir = new Vector3(Utility.Range(rng, -1, 1), Utility.Range(rng, -1, 1), Utility.Range(rng, -1, 1));
+
+        float preferredSpeed = Utility.Range(rng, 3, 3.25);
+        Vector3 direction = Vector3.Normalize(dir);
+        return new Bird
+        {
+            Orientation = Utility.CreateOrientation(direction, Vector3.UnitZ),
+            DesiredDirection = direction,
+            Position = startup ?
+                new Vector3(Utility.Range(rng, -50, 50), Utility.Range(rng, -50, 50), Utility.Range(rng, 40, 50)) :
+                new Vector3(Utility.Range(rng, 30, 50), Utility.Range(rng, 40, 50), 0),
+            Speed = preferredSpeed,
+            PreferredSpeed = preferredSpeed,
+            Mass = Utility.Range(rng, 0.25f, 0.5f),
+            Climb = ClimbDirection.Neither,
+            ClimbStrength = Utility.Range(rng, 0.7f, 1.2f),
+        };
     }
 
     public void Step(float dt, int frameRate)
@@ -73,63 +87,6 @@ public sealed class Simulation
         AdjustPopulationSize(frameRate, dt);
         Think();
         Move(dt);
-    }
-
-    private void AdjustPopulationSize(int frameRate, float dt)
-    {
-        const int minFrameRate = 55;
-        if (frameRate < minFrameRate)
-        {
-            _lowFrameRateUpdates++;
-            if (_lowFrameRateUpdates >= 3 && Birds.Length > 10)
-                ResizePopulation(Math.Max(10, Birds.Length - (minFrameRate - frameRate)));
-        }
-        else
-        {
-            _lowFrameRateUpdates = 0;
-        }
-
-        if (frameRate > 59 && dt > 0f)
-        {
-            _timeSinceLastBird += dt;
-            int birdsToAdd = (int)_timeSinceLastBird;
-            if (birdsToAdd > 0)
-            {
-                _timeSinceLastBird -= birdsToAdd;
-                int firstNewBird = Birds.Length;
-                ResizePopulation(firstNewBird + birdsToAdd);
-                for (int i = firstNewBird; i < Birds.Length; i++)
-                    Birds[i] = CreateBird(_rng, false);
-            }
-        }
-    }
-
-    private void ResizePopulation(int newSize)
-    {
-        Bird[] birds = Birds;
-        Array.Resize(ref birds, newSize);
-        Birds = birds;
-    }
-
-    private static Bird CreateBird(Random rng, bool startup)
-    {
-        Vector3 dir = new Vector3(Range(rng, -1, 1), Range(rng, -1, 1), Range(rng, -1, 1));
-
-        float preferredSpeed = Range(rng, 3, 3.25);
-        Vector3 direction = Vector3.Normalize(dir);
-        return new Bird
-        {
-            Orientation = CreateOrientation(direction, Vector3.UnitZ),
-            DesiredDirection = direction,
-            Position = startup ?
-                new Vector3(Range(rng, -50, 50), Range(rng, -50, 50), Range(rng, 40, 50)) :
-                new Vector3(Range(rng, 30, 50), Range(rng, 40, 50), 0),
-            Speed = preferredSpeed,
-            PreferredSpeed = preferredSpeed,
-            Mass = Range(rng, 0.25f, 0.5f),
-            Climb = ClimbDirection.Neither,
-            ClimbStrength = Range(rng, 0.7f, 1.2f),
-        };
     }
 
     private void Think()
@@ -156,15 +113,15 @@ public sealed class Simulation
             {
                 var level = new Vector3(direction.X, direction.Y, 0f);
                 if (level.LengthSquared() < 1e-6f) level = Vector3.UnitX;
-                toLevel = SteeringDelta(direction, level);
+                toLevel = Utility.SteeringDelta(direction, level);
             }
             else if (bird.Position.Z < SoftFloor)
             {
-                toUp = SteeringDelta(direction, Vector3.UnitZ);
+                toUp = Utility.SteeringDelta(direction, Vector3.UnitZ);
             }
             else if (bird.Position.Z > SoftCeiling)
             {
-                toDown = SteeringDelta(direction, -Vector3.UnitZ);
+                toDown = Utility.SteeringDelta(direction, -Vector3.UnitZ);
             }
 
             if (stalled)
@@ -182,13 +139,13 @@ public sealed class Simulation
                 // Aim toward the center when descending and not close to the center.
                 float manhattan = Math.Abs(offset.X) + Math.Abs(offset.Y) + Math.Abs(offset.Z);
                 if (manhattan > CenterRadius)
-                    toCenter = SteeringDelta(direction, offset) * 0.5f;
+                    toCenter = Utility.SteeringDelta(direction, offset) * 0.5f;
             }
 
             if (CheckNeighbors(i, out Vector3 targetDirection, out Vector3 targetPosition))
             {
-                toNeighbor = SteeringDelta(direction, targetPosition - bird.Position);
-                alignment = SteeringDelta(direction, targetDirection);
+                toNeighbor = Utility.SteeringDelta(direction, targetPosition - bird.Position);
+                alignment = Utility.SteeringDelta(direction, targetDirection);
                 if (stalled)
                 {
                     toNeighbor.Z = 0f;
@@ -201,6 +158,46 @@ public sealed class Simulation
         }
     }
 
+    private void Move(float dt)
+    {
+        var birds = Birds;
+        for (int i = 0; i < birds.Length; i++)
+        {
+            ref Bird bird = ref birds[i];
+            if (dt <= 0f) continue;
+
+            Vector3 oldDirection = bird.Direction;
+            UpdateOrientation(ref bird, dt);
+            Vector3 newDirection = bird.Direction;
+
+            if (MathF.Abs(newDirection.Z) <= LevelSlope)
+            {
+                // When roughly level, return to preferred speed.
+                bird.Speed += (bird.PreferredSpeed - bird.Speed) * (1f - MathF.Exp(-SpeedRelaxRate * dt));
+            }
+            else
+            {
+                // When climbing or diving, adjust speed based on slope.
+                bird.Speed -= SlopeSpeedGain * bird.Speed * newDirection.Z * dt;
+            }
+
+            bird.Speed = Math.Clamp(bird.Speed, MinSpeed, MaxSpeed);
+            bird.Position += newDirection * bird.Speed * dt;
+
+            // This is really more of a "think" operation, but it depends on direction change, which is computed in this functions.
+            // If transitioning to climb from level flight, a fraction of birds will pick a direction to diverge.
+            if (oldDirection.Z <= 0f && newDirection.Z > 0f)
+            {
+                double roll = _rng.NextDouble();
+                bird.Climb = roll < ClimbSpreadFraction ? 
+                    ClimbDirection.Left : roll < (ClimbSpreadFraction * 2) ?
+                    ClimbDirection.Right :
+                    ClimbDirection.Neither;
+            }                        
+        }
+    }
+
+    // A small optimization: precompute distances and directions between birds.
     private void FillDistances()
     {
         var birds = Birds;
@@ -220,39 +217,6 @@ public sealed class Simulation
                 float distance = (birds[j].Position - position).LengthSquared();
                 _distances[i, j] = distance;
                 _distances[j, i] = distance;
-            }
-        }
-    }
-
-    private void Move(float dt)
-    {
-        var birds = Birds;
-        for (int i = 0; i < birds.Length; i++)
-        {
-            ref Bird bird = ref birds[i];
-            if (dt <= 0f) continue;
-
-            Vector3 oldDirection = bird.Direction;
-            UpdateOrientation(ref bird, dt);
-            Vector3 newDirection = bird.Direction;
-
-            if (MathF.Abs(newDirection.Z) <= LevelSlope)
-            {
-                bird.Speed += (bird.PreferredSpeed - bird.Speed) * (1f - MathF.Exp(-SpeedRelaxRate * dt));
-            }
-            else
-            {
-                bird.Speed -= SlopeSpeedGain * bird.Speed * newDirection.Z * dt; // climbing slows, diving speeds up
-            }
-
-            bird.Speed = Math.Clamp(bird.Speed, MinSpeed, MaxSpeed);
-            bird.Position += newDirection * bird.Speed * dt;
-
-            if (oldDirection.Z <= 0f && newDirection.Z > 0f)
-            {
-                double roll = _rng.NextDouble();
-                double subset = ClimbSpreadFraction;
-                bird.Climb = roll < subset ? ClimbDirection.Left : roll < (subset * 2) ? ClimbDirection.Right : ClimbDirection.Neither;
             }
         }
     }
@@ -342,12 +306,7 @@ public sealed class Simulation
         return new Vector3(horizontal.X, horizontal.Y, MathF.CopySign(maxSin, desired.Z));
     }
 
-    private static Vector3 SteeringDelta(Vector3 direction, Vector3 desired)
-    {
-        if (desired.LengthSquared() < 1e-12f) return Vector3.Zero;
-        return Vector3.Normalize(desired) - direction;
-    }
-
+    // This updates the bird's orientation. Turns are accomplished through roll and pitch alone (banking and yanking).
     private static void UpdateOrientation(ref Bird bird, float dt)
     {
         Vector3 forward = bird.Direction;
@@ -451,27 +410,39 @@ public sealed class Simulation
         return Vector3.Normalize(Vector3.Cross(levelUp, forward));
     }
 
-    private static Quaternion CreateOrientation(Vector3 direction, Vector3 up)
+    private void AdjustPopulationSize(int frameRate, float dt)
     {
-        Vector3 forward = Vector3.Normalize(direction);
-        up -= forward * Vector3.Dot(up, forward);
-        if (up.LengthSquared() < 1e-12f)
+        const int minFrameRate = 55;
+        if (frameRate < minFrameRate)
         {
-            up = Math.Abs(forward.Z) < 0.9f ? Vector3.UnitZ : Vector3.UnitX;
-            up -= forward * Vector3.Dot(up, forward);
+            _lowFrameRateUpdates++;
+            if (_lowFrameRateUpdates >= 3 && Birds.Length > 10)
+                ResizePopulation(Math.Max(10, Birds.Length - (minFrameRate - frameRate)));
         }
-        up = Vector3.Normalize(up);
-        Vector3 left = Vector3.Normalize(Vector3.Cross(up, forward));
-        up = Vector3.Cross(forward, left);
+        else
+        {
+            _lowFrameRateUpdates = 0;
+        }
 
-        var matrix = new Matrix4x4(
-            forward.X, forward.Y, forward.Z, 0f,
-            left.X, left.Y, left.Z, 0f,
-            up.X, up.Y, up.Z, 0f,
-            0f, 0f, 0f, 1f);
-        return Quaternion.CreateFromRotationMatrix(matrix);
+        if (frameRate > 59 && dt > 0f)
+        {
+            _timeSinceLastBird += dt;
+            int birdsToAdd = (int)_timeSinceLastBird;
+            if (birdsToAdd > 0)
+            {
+                _timeSinceLastBird -= birdsToAdd;
+                int firstNewBird = Birds.Length;
+                ResizePopulation(firstNewBird + birdsToAdd);
+                for (int i = firstNewBird; i < Birds.Length; i++)
+                    Birds[i] = CreateBird(_rng, false);
+            }
+        }
     }
 
-    private static float Range(Random rng, double min, double max) =>
-        (float)(min + rng.NextDouble() * (max - min));
+    private void ResizePopulation(int newSize)
+    {
+        Bird[] birds = Birds;
+        Array.Resize(ref birds, newSize);
+        Birds = birds;
+    }
 }

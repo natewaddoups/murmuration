@@ -13,6 +13,20 @@ I haven't done any real optimization yet, but a decent laptop can render a flock
 
 ![A few hundred blue and green birds of 16 polygons each](misc/screenshot.png)
 
+### Windows Screen Saver
+
+Build a portable, self-contained Windows x64 package with:
+
+```powershell
+.\publish-screensaver.ps1
+```
+
+The screen saver is written to `artifacts/screensaver/win-x64/Murmuration.scr` as a self-contained executable. In File Explorer, right-click it and choose **Install**. Windows opens Screen Saver Settings; select **Murmuration** in the screen-saver list, set the wait time, and click **Apply**. If the Install command is unavailable, copy `Murmuration.scr` to `%WINDIR%\System32` (administrator permission may be required), then select it in Screen Saver Settings. To uninstall it, choose another screen saver first, then delete the installed `Murmuration.scr`.
+
+The saver covers connected displays and exits on keyboard input, mouse-button input, or deliberate pointer movement. Windows hosts the preview; the configuration command currently displays an informational dialog. To run it without installing, launch `Murmuration.scr /s` from the output folder.
+
+The normal desktop app remains available by running `run.ps1`.
+
 ### Ideas for the future
 
 * Flapping wings when climbing

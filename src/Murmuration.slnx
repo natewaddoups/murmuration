@@ -2,4 +2,5 @@
   <Project Path="Murmuration.Browser/Murmuration.Browser.csproj" />
   <Project Path="Murmuration.Core/Murmuration.Core.csproj" />
   <Project Path="Murmuration.Desktop/Murmuration.Desktop.csproj" />
+  <Project Path="Murmuration.Desktop.Tests/Murmuration.Desktop.Tests.csproj" />
 </Solution>

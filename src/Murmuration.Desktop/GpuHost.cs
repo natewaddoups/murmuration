@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Avalonia.Controls;
 using Avalonia.Platform;
@@ -10,16 +9,21 @@ public sealed class GpuHost : NativeControlHost
 {
     private readonly Simulation _simulation;
     private IntPtr _hwnd;
-    private Thread? _thread;
-    private volatile bool _running;
+    private GpuRenderSession? _session;
     private volatile bool _paused;
 
     public GpuHost(Simulation simulation) => _simulation = simulation;
 
-    public void TogglePause() => _paused = !_paused;
+    public void TogglePause()
+    {
+        _paused = !_paused;
+        if (_session is not null)
+            _session.Paused = _paused;
+    }
 
     // Raised on the render thread.
     public event Action<double>? FpsUpdated;
+    public event Action<Exception>? RenderFailed;
 
     protected override IPlatformHandle CreateNativeControlCore(IPlatformHandle parent)
     {
@@ -29,46 +33,37 @@ public sealed class GpuHost : NativeControlHost
 
         const uint WS_CHILD = 0x40000000, WS_VISIBLE = 0x10000000;
         _hwnd = CreateWindowExW(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 0, 0, 100, 100, parent.Handle, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+        if (_hwnd == IntPtr.Zero)
+            throw new InvalidOperationException($"Unable to create the GPU child window (Win32 error {Marshal.GetLastWin32Error()}).");
 
-        _running = true;
-        _thread = new Thread(RenderLoop) { IsBackground = true, Name = "Render" };
-        _thread.Start();
+        _session = new GpuRenderSession(_hwnd, _simulation);
+        _session.FpsUpdated += fps => FpsUpdated?.Invoke(fps);
+        _session.Failed += exception => RenderFailed?.Invoke(exception);
+        try
+        {
+            _session.Start();
+        }
+        catch
+        {
+            _session = null;
+            DestroyWindow(_hwnd);
+            _hwnd = IntPtr.Zero;
+            throw;
+        }
         return new PlatformHandle(_hwnd, "HWND");
     }
 
     protected override void DestroyNativeControlCore(IPlatformHandle control)
     {
-        _running = false;
-        _thread?.Join();
-        _thread = null;
+        _session?.Stop();
+        _session = null;
         DestroyWindow(control.Handle);
     }
 
-    private void RenderLoop()
-    {
-        using var renderer = new WebGpuDesktopRenderer(_hwnd);
-        var runner = new FrameRunner(_simulation, renderer);
-        runner.FpsUpdated += fps => FpsUpdated?.Invoke(fps);
-        var clock = Stopwatch.StartNew();
-
-        while (_running)
-        {
-            runner.Paused = _paused;
-            GetClientRect(_hwnd, out RECT rect);
-            runner.Frame(clock.Elapsed.TotalSeconds, Math.Max(1, rect.Right), Math.Max(1, rect.Bottom));
-        }
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct RECT { public int Left, Top, Right, Bottom; }
-
-    [DllImport("user32.dll")]
-    private static extern bool GetClientRect(IntPtr hwnd, out RECT rect);
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern IntPtr CreateWindowExW(uint exStyle, string className, string windowName, uint style,
         int x, int y, int w, int h, IntPtr parent, IntPtr menu, IntPtr instance, IntPtr param);
 
-    [DllImport("user32.dll")]
+    [DllImport("user32.dll", SetLastError = true)]
     private static extern bool DestroyWindow(IntPtr hwnd);
 }
