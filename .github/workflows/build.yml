@@ -7,8 +7,12 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -19,3 +23,34 @@ jobs:
 
       - name: Build
         run: dotnet build src/Murmuration.slnx --configuration Release
+
+      - name: Compute version
+        id: version
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $minor = (Get-ChildItem prompts -Filter '*.md' |
+              Where-Object { $_.BaseName -match '^\d+$' } |
+              ForEach-Object { [int]$_.BaseName } |
+              Measure-Object -Maximum).Maximum
+          $tags = gh release list --limit 1000 --json tagName --jq '.[].tagName'
+          if ($LASTEXITCODE -ne 0) { throw "gh release list failed." }
+          $patch = @($tags | Where-Object { $_ -match "^v1\.$minor\.\d+$" }).Count
+          "version=1.$minor.$patch" >> $env:GITHUB_OUTPUT
+
+      - name: Publish screen saver
+        shell: pwsh
+        run: ./publish-screensaver.ps1
+
+      - name: Create release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $notes = Join-Path $env:RUNNER_TEMP 'notes.txt'
+          git log -1 --format=%B $env:GITHUB_SHA | Set-Content -LiteralPath $notes
+          gh release create "v$env:VERSION" artifacts/screensaver/win-x64/Murmuration.scr `
+              --title "Murmuration $env:VERSION" --notes-file $notes --target $env:GITHUB_SHA --latest
+          if ($LASTEXITCODE -ne 0) { throw "gh release create failed." }

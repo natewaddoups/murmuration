@@ -2,10 +2,14 @@ param([string]$OutputDirectory = (Join-Path $PSScriptRoot 'artifacts/screensaver
 
 $ErrorActionPreference = 'Stop'
 
+Remove-Item -LiteralPath $OutputDirectory -Recurse -Force -ErrorAction SilentlyContinue
+
 $project = Join-Path $PSScriptRoot 'src/Murmuration.Desktop/Murmuration.Desktop.csproj'
 
 dotnet publish $project --configuration Release --runtime win-x64 --self-contained true --output $outputDirectory `
-    -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None
+    -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None `
+    -p:PublishTrimmed=true -p:TrimMode=partial -p:EnableCompressionInSingleFile=true `
+    -p:InvariantGlobalization=true -p:UseSystemResourceKeys=true
 if ($LASTEXITCODE -ne 0) {
     throw "dotnet publish failed with exit code $LASTEXITCODE."
 }
