@@ -1,8 +1,10 @@
-name: Build
+name: Release screen saver
 
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "src/Murmuration.Browser/**"
 
 jobs:
   build:
@@ -18,11 +20,8 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Install wasm-tools workload
-        run: dotnet workload install wasm-tools
-
       - name: Build
-        run: dotnet build src/Murmuration.slnx --configuration Release
+        run: dotnet build src/Murmuration.Desktop.Tests/Murmuration.Desktop.Tests.csproj --configuration Release
 
       - name: Compute version
         id: version

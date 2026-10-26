@@ -1,5 +1,5 @@
 # Builds the browser demo and deploys it to GitHub Pages
-name: Deploy static content to Pages
+name: Release web page
 
 on:
   # Runs on pushes to the default branch that touch the app source
@@ -7,7 +7,8 @@ on:
     branches: ["main"]
     paths:
       - "src/**"
-      - ".github/workflows/static.yml"
+      - "!src/Murmuration.Desktop*/**"
+      - ".github/workflows/release-web-page.yml"
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
