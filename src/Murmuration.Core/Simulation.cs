@@ -27,14 +27,15 @@ public sealed class Simulation
     private const int NeighborCount = 20;
     private const float CenterRadius = 10.0f;
     private const float MaxRollRate = 360f * MathF.PI / 180f;
-    private const float MaxPitchRate = 360f * MathF.PI / 180f;
+    private const float MaxPitchRate = 270f * MathF.PI / 180f;
     private const float Gravity = 9.81f;
     private const float MaxBank = 60f * MathF.PI / 180f;
     private const float MinSpeed = 2.5f;
-    private const float SpeedRelaxRate = 1.0f;
-    private const float SlopeSpeedGain = 0.5f;
     private const float StallSpeed = 2.75f;
     private const float MaxSpeed = 5.0f;
+    private const float SpeedRelaxRate = 1.0f;
+    private const float FlockSpeedAdjustmentRate = 0.02f;
+    private const float SlopeSpeedGain = 0.5f;
     private const float SoftFloor = 20f;
     private const float SoftCeiling = 30f;
     private const float ClimbSpreadFraction = 0.1f;
@@ -85,11 +86,11 @@ public sealed class Simulation
     {
         // Temporarily disabled for testing
         AdjustPopulationSize(frameRate, dt);
-        Think();
+        Think(dt);
         Move(dt);
     }
 
-    private void Think()
+    private void Think(float dt)
     {
         var birds = Birds;
         FillDistances();
@@ -144,6 +145,12 @@ public sealed class Simulation
 
             if (CheckNeighbors(i, out Vector3 targetDirection, out Vector3 targetPosition))
             {
+                float targetDistance = Vector3.Distance(bird.Position, targetPosition);
+                if (targetDistance > CloseNeighborRange)
+                    bird.Speed = MathF.Min(MaxSpeed, bird.Speed * (1f + FlockSpeedAdjustmentRate * dt));
+                else if (targetDistance < CloseNeighborRange)
+                    bird.Speed = MathF.Max(bird.PreferredSpeed, bird.Speed * (1f - FlockSpeedAdjustmentRate * dt));
+
                 toNeighbor = Utility.SteeringDelta(direction, targetPosition - bird.Position);
                 alignment = Utility.SteeringDelta(direction, targetDirection);
                 if (stalled)
@@ -153,7 +160,16 @@ public sealed class Simulation
                 }
             }
 
-            Vector3 sum = direction * 0.5f + toCenter + toNeighbor + alignment + climbYaw + toUp + toDown + toLevel;
+
+
+            Vector3 sum = (direction * 0.5f) + 
+                toCenter + 
+                toNeighbor + 
+                alignment + 
+                climbYaw + 
+                toUp + 
+                toDown + 
+                toLevel;
             bird.DesiredDirection = ClampSlope(sum.LengthSquared() > 1e-12f ? Vector3.Normalize(sum) : direction, direction);
         }
     }
@@ -170,7 +186,7 @@ public sealed class Simulation
             UpdateOrientation(ref bird, dt);
             Vector3 newDirection = bird.Direction;
 
-            if (MathF.Abs(newDirection.Z) <= LevelSlope)
+            if (MathF.Abs(newDirection.Z) <= LevelSlope && bird.Speed <= bird.PreferredSpeed)
             {
                 // When roughly level, return to preferred speed.
                 bird.Speed += (bird.PreferredSpeed - bird.Speed) * (1f - MathF.Exp(-SpeedRelaxRate * dt));
