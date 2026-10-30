@@ -10,7 +10,8 @@ public sealed unsafe class WebGpuDesktopRenderer : IGpuRenderer
 {
     private const TextureFormat DepthFormat = TextureFormat.Depth32float;
 
-    private readonly WebGPU _wgpu = WebGPU.GetApi();
+    private readonly WebGPU _wgpu;
+    private readonly IntPtr _preloadedNativeLibrary;
     private readonly Instance* _instance;
     private readonly Surface* _surface;
     private readonly Device* _device;
@@ -32,13 +33,24 @@ public sealed unsafe class WebGpuDesktopRenderer : IGpuRenderer
 
     public WebGpuDesktopRenderer(IntPtr hwnd)
     {
+        _preloadedNativeLibrary = WebGpuNativeLibrary.Load();
+        try
+        {
+            _wgpu = WebGPU.GetApi();
+        }
+        catch
+        {
+            NativeLibrary.Free(_preloadedNativeLibrary);
+            throw;
+        }
+
         var instanceDesc = new InstanceDescriptor();
         _instance = _wgpu.CreateInstance(&instanceDesc);
 
         var hwndDesc = new SurfaceDescriptorFromWindowsHWND
         {
             Chain = new ChainedStruct { SType = SType.SurfaceDescriptorFromWindowsHwnd },
-            Hinstance = (void*)Marshal.GetHINSTANCE(typeof(WebGpuDesktopRenderer).Module),
+            Hinstance = (void*)GetModuleHandleW(null),
             Hwnd = (void*)hwnd,
         };
         var surfaceDesc = new SurfaceDescriptor { NextInChain = (ChainedStruct*)&hwndDesc };
@@ -257,5 +269,9 @@ public sealed unsafe class WebGpuDesktopRenderer : IGpuRenderer
         _wgpu.SurfaceRelease(_surface);
         _wgpu.InstanceRelease(_instance);
         _wgpu.Dispose();
+        NativeLibrary.Free(_preloadedNativeLibrary);
     }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr GetModuleHandleW(string? moduleName);
 }

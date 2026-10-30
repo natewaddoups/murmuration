@@ -1,0 +1,17 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Attach to Murmuration.exe",
+      "type": "coreclr",
+      "request": "attach",
+      "processName": "Murmuration.exe"
+    },
+    {
+      "name": "Attach to Process (pick)",
+      "type": "coreclr",
+      "request": "attach",
+      "processId": "${command:pickProcess}"
+    }
+  ]
+}
