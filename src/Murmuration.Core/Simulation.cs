@@ -22,12 +22,12 @@ public sealed class Simulation
 {
     public static readonly Vector3 Center = new(0, 0, 25);
     private const float NeighborDistance = 1.0f; // smaller values lead to single-file formations
-    private const float CloseNeighborRange = 5.0f;
+    private const float CloseNeighborRange = 2f;
     private const float NeighborRange = 50.0f;
-    private const int NeighborCount = 20;
+    private const int NeighborCount = 50;
     private const float CenterRadius = 10.0f;
-    private const float MaxRollRate = 360f * MathF.PI / 180f;
-    private const float MaxPitchRate = 270f * MathF.PI / 180f;
+    private const float MaxRollRate = 90f * MathF.PI / 180f;
+    private const float MaxPitchRate = 90f * MathF.PI / 180f;
     private const float Gravity = 9.81f;
     private const float MaxBank = 60f * MathF.PI / 180f;
     private const float MinSpeed = 2.5f;
@@ -84,8 +84,9 @@ public sealed class Simulation
 
     public void Step(float dt, int frameRate)
     {
-        // Temporarily disabled for testing
+        // Temporarily disable for testing
         AdjustPopulationSize(frameRate, dt);
+
         Think(dt);
         Move(dt);
     }
@@ -153,6 +154,17 @@ public sealed class Simulation
 
                 toNeighbor = Utility.SteeringDelta(direction, targetPosition - bird.Position);
                 alignment = Utility.SteeringDelta(direction, targetDirection);
+
+                if (targetDistance > CloseNeighborRange)
+                {
+                    alignment = alignment * 0.5f;
+                }
+
+                if (targetDistance > CloseNeighborRange * 2)
+                {
+                    alignment = alignment * 0.5f;
+                }
+
                 if (stalled)
                 {
                     toNeighbor.Z = 0f;
@@ -249,6 +261,7 @@ public sealed class Simulation
         Span<float> bestDistance = stackalloc float[NeighborCount];
         int found = 0;
 
+        // Find the closest NeighborCount neighbors within NeighborRange.
         for (int j = 0; j < Birds.Length; j++)
         {
             if (j == index) continue;
@@ -275,6 +288,7 @@ public sealed class Simulation
 
         if (found == 0 || bestDistance[0] < 1e-12f) return false;
 
+        // Sum the positions and directions of the found neighbors to compute averages.
         Vector3 sum = Vector3.Zero;
         Vector3 directionSum = Vector3.Zero;
         for (int k = 0; k < found; k++)
@@ -283,7 +297,11 @@ public sealed class Simulation
             directionSum += _directions[best[k]];
         }
 
+        // Compute the target direction as the normalized sum of neighbor directions, or fallback to the current direction if the sum is too small.
         targetDirection = directionSum.LengthSquared() > 1e-12f ? Vector3.Normalize(directionSum) : _directions[index];
+
+        // If the closest neighbor is within the close neighbor range, adjust 
+        // the target position to maintain a safe distance.
         if (bestDistance[0] <= CloseNeighborRange * CloseNeighborRange)
         {
             Vector3 closestPosition = Birds[best[0]].Position;

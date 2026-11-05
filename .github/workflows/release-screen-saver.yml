@@ -49,7 +49,16 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           $notes = Join-Path $env:RUNNER_TEMP 'notes.txt'
-          git log -1 --format=%B $env:GITHUB_SHA | Set-Content -LiteralPath $notes
+          @'
+          Murmuration.scr (linked below) is a Windows screen saver.
+
+          To use it, download the file to your computer, right-click on it, and pick "Install" from the menu that appears.
+
+          You may need to right-click on it 2-3 times before the "Install" option appears. Not sure why, but I suspect that's a Windows bug.
+
+          Changes in this version:
+          '@ | Set-Content -LiteralPath $notes
+          git log -1 --format=%B $env:GITHUB_SHA | Add-Content -LiteralPath $notes
           gh release create "v$env:VERSION" artifacts/screensaver/win-x64/Murmuration.scr `
               --title "Murmuration $env:VERSION" --notes-file $notes --target $env:GITHUB_SHA --latest
           if ($LASTEXITCODE -ne 0) { throw "gh release create failed." }

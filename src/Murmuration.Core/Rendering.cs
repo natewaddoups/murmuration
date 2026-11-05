@@ -30,6 +30,7 @@ public sealed class FrameRunner
     private readonly IGpuRenderer _renderer;
     private InstanceData[] _instances;
     private double _lastTime = double.NaN;
+    private double _startTime;
     private double _fpsWindowStart;
     private int _fpsFrames;
 
@@ -49,7 +50,7 @@ public sealed class FrameRunner
     {
         if (double.IsNaN(_lastTime))
         {
-            _lastTime = _fpsWindowStart = nowSeconds;
+            _lastTime = _fpsWindowStart = _startTime = nowSeconds;
         }
 
         double frameDelta = nowSeconds - _lastTime;
@@ -71,7 +72,7 @@ public sealed class FrameRunner
             };
         }
 
-        Matrix4x4 viewProj = Camera.ViewProjection((float)width / height);
+        Matrix4x4 viewProj = Camera.ViewProjection((float)width / height, nowSeconds - _startTime, in birds[0]);
         _renderer.Render(_instances, in viewProj, width, height);
 
         _fpsFrames++;
