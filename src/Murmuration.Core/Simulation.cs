@@ -25,6 +25,9 @@ public sealed class Simulation
     private const float CloseNeighborRange = 2f;
     private const float NeighborRange = 50.0f;
     private const int NeighborCount = 50;
+    // 10 = constant turning
+    // 15 = alternating turning vs flying in a straight-ish line
+    // 20 = the flock spends too much time off screen 
     private const float CenterRadius = 10.0f;
     private const float MaxRollRate = 90f * MathF.PI / 180f;
     private const float MaxPitchRate = 90f * MathF.PI / 180f;
@@ -34,11 +37,11 @@ public sealed class Simulation
     private const float StallSpeed = 2.75f;
     private const float MaxSpeed = 5.0f;
     private const float SpeedRelaxRate = 1.0f;
-    private const float FlockSpeedAdjustmentRate = 0.02f;
+    private const float FlockSpeedAdjustmentRate = 0.10f;
     private const float SlopeSpeedGain = 0.5f;
     private const float SoftFloor = 20f;
     private const float SoftCeiling = 30f;
-    private const float ClimbSpreadFraction = 0.1f;
+    private const float ClimbSpreadFraction = 0.01f;
     private static readonly float MaxAscentSin = MathF.Sin(30f * MathF.PI / 180f);
     private static readonly float MaxDescentSin = MathF.Sin(45f * MathF.PI / 180f);
     private static readonly float MinNeighborAlignment = MathF.Cos(90f * MathF.PI / 180f);
@@ -84,7 +87,7 @@ public sealed class Simulation
 
     public void Step(float dt, int frameRate)
     {
-        // Temporarily disable for testing
+        // Comment this out for testing
         AdjustPopulationSize(frameRate, dt);
 
         Think(dt);
@@ -113,16 +116,19 @@ public sealed class Simulation
             bool stalled = bird.Speed < StallSpeed;
             if (stalled)
             {
+                // When stalled, aim to level out horizontally.
                 var level = new Vector3(direction.X, direction.Y, 0f);
                 if (level.LengthSquared() < 1e-6f) level = Vector3.UnitX;
                 toLevel = Utility.SteeringDelta(direction, level);
             }
             else if (bird.Position.Z < SoftFloor)
             {
+                // When below the soft floor, aim to climb upwards.
                 toUp = Utility.SteeringDelta(direction, Vector3.UnitZ);
             }
             else if (bird.Position.Z > SoftCeiling)
             {
+                // When above the soft ceiling, aim to descend.
                 toDown = Utility.SteeringDelta(direction, -Vector3.UnitZ);
             }
 
@@ -172,8 +178,7 @@ public sealed class Simulation
                 }
             }
 
-
-
+            // Combine all steering influences to determine the desired direction.
             Vector3 sum = (direction * 0.5f) + 
                 toCenter + 
                 toNeighbor + 
@@ -188,16 +193,18 @@ public sealed class Simulation
 
     private void Move(float dt)
     {
+        if (dt <= 0f) return;
+
         var birds = Birds;
         for (int i = 0; i < birds.Length; i++)
         {
             ref Bird bird = ref birds[i];
-            if (dt <= 0f) continue;
 
             Vector3 oldDirection = bird.Direction;
             UpdateOrientation(ref bird, dt);
             Vector3 newDirection = bird.Direction;
 
+            // Adjust speed based on whether the bird is level or climbing/diving.
             if (MathF.Abs(newDirection.Z) <= LevelSlope && bird.Speed <= bird.PreferredSpeed)
             {
                 // When roughly level, return to preferred speed.
@@ -209,7 +216,10 @@ public sealed class Simulation
                 bird.Speed -= SlopeSpeedGain * bird.Speed * newDirection.Z * dt;
             }
 
+            // Clamp speed to the allowed range 
             bird.Speed = Math.Clamp(bird.Speed, MinSpeed, MaxSpeed);
+
+            // and update position based on new direction and speed.
             bird.Position += newDirection * bird.Speed * dt;
 
             // This is really more of a "think" operation, but it depends on direction change, which is computed in this functions.
@@ -249,7 +259,9 @@ public sealed class Simulation
         }
     }
 
-    // Close neighbors use the nearest point on their perpendicular plane; otherwise target the average position of the closest few eligible birds.
+    // Determine the target direction and position based on nearby neighbors.
+    // For close neighbors, aim for the nearest point on their perpendicular plane.
+    // Otherwise, target the average position of the closest few eligible birds.
     private bool CheckNeighbors(int index, out Vector3 targetDirection, out Vector3 targetPosition)
     {
         targetPosition = default;
