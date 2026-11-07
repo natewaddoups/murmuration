@@ -47,21 +47,56 @@ public sealed class Simulation
     private static readonly float MinNeighborAlignment = MathF.Cos(90f * MathF.PI / 180f);
     private static readonly float LevelSlope = MathF.Sin(20f * MathF.PI / 180f);
 
+    internal static string WgslConstants => FormattableString.Invariant($"""
+        const Center: vec3<f32> = vec3<f32>(f32({Center.X:R}), f32({Center.Y:R}), f32({Center.Z:R}));
+        const NeighborDistance: f32 = f32({NeighborDistance:R});
+        const CloseNeighborRange: f32 = f32({CloseNeighborRange:R});
+        const NeighborRange: f32 = f32({NeighborRange:R});
+        const NeighborCount: u32 = {NeighborCount}u;
+        const CenterRadius: f32 = f32({CenterRadius:R});
+        const MaxRollRate: f32 = f32({MaxRollRate:R});
+        const MaxPitchRate: f32 = f32({MaxPitchRate:R});
+        const Gravity: f32 = f32({Gravity:R});
+        const MaxBank: f32 = f32({MaxBank:R});
+        const MinSpeed: f32 = f32({MinSpeed:R});
+        const StallSpeed: f32 = f32({StallSpeed:R});
+        const MaxSpeed: f32 = f32({MaxSpeed:R});
+        const SpeedRelaxRate: f32 = f32({SpeedRelaxRate:R});
+        const FlockSpeedAdjustmentRate: f32 = f32({FlockSpeedAdjustmentRate:R});
+        const SlopeSpeedGain: f32 = f32({SlopeSpeedGain:R});
+        const SoftFloor: f32 = f32({SoftFloor:R});
+        const SoftCeiling: f32 = f32({SoftCeiling:R});
+        const ClimbSpreadFraction: f32 = f32({ClimbSpreadFraction:R});
+        const MaxAscentSin: f32 = f32({MaxAscentSin:R});
+        const MaxDescentSin: f32 = f32({MaxDescentSin:R});
+        const MinNeighborAlignment: f32 = f32({MinNeighborAlignment:R});
+        const LevelSlope: f32 = f32({LevelSlope:R});
+
+        """);
+
     private Vector3[] _directions = [];
     private float[,] _distances = new float[0, 0]; // squared distances between birds
     private readonly Random _rng;
-    private float _timeSinceLastBird;
-    private int _lowFrameRateUpdates;
+    private readonly PopulationController _population = new();
+    private bool _initialized;
+    internal uint Seed { get; }
 
     public Bird[] Birds { get; private set; }
 
-    public Simulation(int count, int seed = 1)
+    public Simulation(int count, int seed = 1, bool deferInitialization = false)
     {
-        var rng = _rng = new Random(seed);
+        Seed = unchecked((uint)seed);
+        _rng = new Random(seed);
         Birds = new Bird[count];
+        if (!deferInitialization) EnsureInitialized();
+    }
 
-        for (int i = 0; i < count; i++)
-            Birds[i] = CreateBird(rng, true);
+    internal void EnsureInitialized()
+    {
+        if (_initialized) return;
+        for (int i = 0; i < Birds.Length; i++)
+            Birds[i] = CreateBird(_rng, true);
+        _initialized = true;
     }
 
     private static Bird CreateBird(Random rng, bool startup)
@@ -87,6 +122,7 @@ public sealed class Simulation
 
     public void Step(float dt, int frameRate)
     {
+        EnsureInitialized();
         // Comment this out for testing
         AdjustPopulationSize(frameRate, dt);
 
@@ -456,14 +492,39 @@ public sealed class Simulation
         return Vector3.Normalize(Vector3.Cross(levelUp, forward));
     }
 
-    private void AdjustPopulationSize(int frameRate, float dt)
+    internal void AdjustPopulationSize(int frameRate, float dt, int maximum = int.MaxValue, bool initializeNewBirds = true)
+    {
+        int firstNewBird = Birds.Length;
+        int newSize = Math.Min(maximum, _population.Advance(firstNewBird, frameRate, dt));
+        if (newSize == firstNewBird) return;
+
+        ResizePopulation(newSize);
+        if (initializeNewBirds)
+            for (int i = firstNewBird; i < Birds.Length; i++)
+                Birds[i] = CreateBird(_rng, false);
+    }
+
+    private void ResizePopulation(int newSize)
+    {
+        Bird[] birds = Birds;
+        Array.Resize(ref birds, newSize);
+        Birds = birds;
+    }
+}
+
+internal sealed class PopulationController
+{
+    private float _timeSinceLastBird;
+    private int _lowFrameRateUpdates;
+
+    public int Advance(int count, int frameRate, float dt)
     {
         const int minFrameRate = 55;
         if (frameRate < minFrameRate)
         {
             _lowFrameRateUpdates++;
-            if (_lowFrameRateUpdates >= 3 && Birds.Length > 10)
-                ResizePopulation(Math.Max(10, Birds.Length - (minFrameRate - frameRate)));
+            if (_lowFrameRateUpdates >= 3 && count > 10)
+                count = Math.Max(10, count - (minFrameRate - frameRate));
         }
         else
         {
@@ -477,18 +538,10 @@ public sealed class Simulation
             if (birdsToAdd > 0)
             {
                 _timeSinceLastBird -= birdsToAdd;
-                int firstNewBird = Birds.Length;
-                ResizePopulation(firstNewBird + birdsToAdd);
-                for (int i = firstNewBird; i < Birds.Length; i++)
-                    Birds[i] = CreateBird(_rng, false);
+                count += birdsToAdd;
             }
         }
-    }
 
-    private void ResizePopulation(int newSize)
-    {
-        Bird[] birds = Birds;
-        Array.Resize(ref birds, newSize);
-        Birds = birds;
+        return count;
     }
 }

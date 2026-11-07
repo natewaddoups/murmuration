@@ -1,14 +1,27 @@
 const VERTEX_STRIDE = 24;
-const INSTANCE_STRIDE = 36;
 
 let device, context, canvas, format, pipeline, bindGroup;
 let uniformBuffer, birdBuffer, groundBuffer, instanceBuffer, groundInstanceBuffer;
-let depthTexture, depthView, birdVertexCount, maxInstances;
+let depthTexture, depthView, birdVertexCount, maxBirds, capacity = 0;
+let computePipeline, initializePipeline, simulationUniform, stateBuffers, stateIndex = 0, simulationStep = 0;
+let birdStride, instanceStride, deviceFailure;
+let computeBindGroups, initializeBindGroups;
+const simulationParameters = new ArrayBuffer(32);
+const simulationIntegers = new Uint32Array(simulationParameters);
+const simulationFloats = new Float32Array(simulationParameters);
 
 export async function initDevice(canvasId) {
     if (!navigator.gpu) throw new Error('WebGPU is not available in this browser.');
     const adapter = await navigator.gpu.requestAdapter();
+    if (!adapter) throw new Error('No WebGPU adapter is available.');
     device = await adapter.requestDevice();
+    const currentDevice = device;
+    device.lost.then(info => {
+        if (device === currentDevice && info.reason !== 'destroyed') {
+            deviceFailure = `WebGPU device lost: ${info.message || info.reason}`;
+            console.error(deviceFailure);
+        }
+    });
 
     canvas = document.getElementById(canvasId);
     context = canvas.getContext('webgpu');
@@ -17,16 +30,18 @@ export async function initDevice(canvasId) {
 }
 
 // The byte views passed in are .NET MemoryViews over WASM memory, valid only during the call, so they are copied immediately.
-export function createResources(shaderSource, birdBytes, groundBytes, groundInstanceBytes, maxInstanceCount) {
-    maxInstances = maxInstanceCount;
+export function createResources(shaderSource, birdBytes, groundBytes, groundInstanceBytes, gpuBirdStride, gpuInstanceStride) {
+    birdStride = gpuBirdStride;
+    instanceStride = gpuInstanceStride;
+    maxBirds = Math.min(2147483647, Math.floor(device.limits.maxStorageBufferBindingSize / birdStride),
+        Math.floor(device.limits.maxBufferSize / birdStride), device.limits.maxComputeWorkgroupsPerDimension * 64);
     birdVertexCount = birdBytes.byteLength / VERTEX_STRIDE;
 
     uniformBuffer = device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     birdBuffer = uploaded(birdBytes, GPUBufferUsage.VERTEX);
     groundBuffer = uploaded(groundBytes, GPUBufferUsage.VERTEX);
     groundInstanceBuffer = uploaded(groundInstanceBytes, GPUBufferUsage.VERTEX);
-    instanceBuffer = device.createBuffer({ size: maxInstances * INSTANCE_STRIDE, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
-
+    simulationUniform = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const module = device.createShaderModule({ code: shaderSource });
     pipeline = device.createRenderPipeline({
         layout: 'auto',
@@ -42,7 +57,7 @@ export function createResources(shaderSource, birdBytes, groundBytes, groundInst
                     ],
                 },
                 {
-                    arrayStride: INSTANCE_STRIDE,
+                    arrayStride: instanceStride,
                     stepMode: 'instance',
                     attributes: [
                         { shaderLocation: 2, offset: 0, format: 'float32x3' },
@@ -60,6 +75,75 @@ export function createResources(shaderSource, birdBytes, groundBytes, groundInst
         layout: pipeline.getBindGroupLayout(0),
         entries: [{ binding: 0, resource: { buffer: uniformBuffer } }],
     });
+}
+
+export async function createCompute(simulationSource) {
+    try {
+        const module = device.createShaderModule({ code: simulationSource });
+        computePipeline = await device.createComputePipelineAsync({
+            layout: 'auto',
+            compute: { module, entryPoint: 'simulate' },
+        });
+        initializePipeline = await device.createComputePipelineAsync({
+            layout: 'auto',
+            compute: { module, entryPoint: 'initialize' },
+        });
+    } catch (error) {
+        computePipeline = null;
+        initializePipeline = null;
+        console.warn('GPU simulation unavailable; using CPU simulation.', error);
+    }
+    return !!computePipeline;
+}
+
+export function getMaxBirds() { return maxBirds; }
+
+function ensureCapacity(count) {
+    if (deviceFailure) throw new Error(deviceFailure);
+    if (count > maxBirds) throw new Error(`At most ${maxBirds} birds are supported by this device.`);
+    if (count <= capacity) return;
+    const newCapacity = Math.min(maxBirds, Math.max(count, capacity ? capacity * 2 : 128));
+    const newStates = [0, 1].map(() => device.createBuffer({
+        size: newCapacity * birdStride,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+    }));
+    const newInstances = device.createBuffer({
+        size: newCapacity * instanceStride,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    });
+    if (stateBuffers) {
+        const oldStates = stateBuffers;
+        const oldInstances = instanceBuffer;
+        const encoder = device.createCommandEncoder();
+        encoder.copyBufferToBuffer(oldStates[stateIndex], 0, newStates[0], 0, capacity * birdStride);
+        device.queue.submit([encoder.finish()]);
+        device.queue.onSubmittedWorkDone().then(() => {
+            oldStates.forEach(buffer => buffer.destroy());
+            oldInstances.destroy();
+        });
+    }
+    stateBuffers = newStates;
+    stateIndex = 0;
+    instanceBuffer = newInstances;
+    capacity = newCapacity;
+    if (computePipeline) {
+        computeBindGroups = [0, 1].map(index => device.createBindGroup({
+            layout: computePipeline.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: { buffer: simulationUniform } },
+                { binding: 1, resource: { buffer: stateBuffers[index] } },
+                { binding: 2, resource: { buffer: stateBuffers[1 - index] } },
+                { binding: 3, resource: { buffer: instanceBuffer } },
+            ],
+        }));
+        initializeBindGroups = [0, 1].map(index => device.createBindGroup({
+            layout: initializePipeline.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: { buffer: simulationUniform } },
+                { binding: 2, resource: { buffer: stateBuffers[1 - index] } },
+            ],
+        }));
+    }
 }
 
 function uploaded(view, usage) {
@@ -84,7 +168,44 @@ export function getWidth() { return canvas.width; }
 export function getHeight() { return canvas.height; }
 
 export function render(instanceBytes, viewProjBytes, instanceCount) {
-    if (instanceCount > maxInstances) throw new Error(`At most ${maxInstances} birds are supported.`);
+    ensureCapacity(instanceCount);
+    device.queue.writeBuffer(instanceBuffer, 0, instanceBytes.slice());
+    const encoder = device.createCommandEncoder();
+    draw(encoder, viewProjBytes, instanceCount);
+    device.queue.submit([encoder.finish()]);
+}
+
+export function renderSimulation(firstNewBird, count, delta, seed, viewProjBytes) {
+    ensureCapacity(count);
+
+    simulationIntegers[0] = count;
+    simulationFloats[1] = delta;
+    simulationIntegers[2] = simulationStep;
+    simulationIntegers[3] = firstNewBird;
+    simulationIntegers[4] = seed >>> 0;
+    device.queue.writeBuffer(simulationUniform, 0, simulationParameters);
+    const encoder = device.createCommandEncoder();
+    if (firstNewBird < count) {
+        const initialize = encoder.beginComputePass();
+        initialize.setPipeline(initializePipeline);
+        initialize.setBindGroup(0, initializeBindGroups[stateIndex]);
+        initialize.dispatchWorkgroups(Math.ceil((count - firstNewBird) / 64));
+        initialize.end();
+        encoder.copyBufferToBuffer(stateBuffers[1 - stateIndex], firstNewBird * birdStride,
+            stateBuffers[stateIndex], firstNewBird * birdStride, (count - firstNewBird) * birdStride);
+    }
+    const compute = encoder.beginComputePass();
+    compute.setPipeline(computePipeline);
+    compute.setBindGroup(0, computeBindGroups[stateIndex]);
+    compute.dispatchWorkgroups(Math.ceil(count / 64));
+    compute.end();
+    draw(encoder, viewProjBytes, count);
+    device.queue.submit([encoder.finish()]);
+    stateIndex = 1 - stateIndex;
+    if (delta > 0) simulationStep = (simulationStep + 1) >>> 0;
+}
+
+function draw(encoder, viewProjBytes, instanceCount) {
 
     if (!depthTexture || depthTexture.width !== canvas.width || depthTexture.height !== canvas.height) {
         depthTexture?.destroy();
@@ -97,9 +218,7 @@ export function render(instanceBytes, viewProjBytes, instanceCount) {
     }
 
     device.queue.writeBuffer(uniformBuffer, 0, viewProjBytes.slice());
-    device.queue.writeBuffer(instanceBuffer, 0, instanceBytes.slice());
 
-    const encoder = device.createCommandEncoder();
     const pass = encoder.beginRenderPass({
         colorAttachments: [{
             view: context.getCurrentTexture().createView(),
@@ -120,9 +239,29 @@ export function render(instanceBytes, viewProjBytes, instanceCount) {
     pass.setVertexBuffer(1, instanceBuffer);
     pass.draw(birdVertexCount, instanceCount);
     pass.end();
-    device.queue.submit([encoder.finish()]);
 }
 
 export function requestFrame(callback) {
     requestAnimationFrame(callback);
+}
+
+export function dispose() {
+    context?.unconfigure();
+    depthTexture?.destroy();
+    for (const buffer of [uniformBuffer, birdBuffer, groundBuffer, instanceBuffer, groundInstanceBuffer, simulationUniform])
+        buffer?.destroy();
+    stateBuffers?.forEach(buffer => buffer.destroy());
+    device?.destroy();
+    device = null;
+    stateBuffers = null;
+    depthTexture = null;
+    instanceBuffer = null;
+    capacity = 0;
+    stateIndex = 0;
+    simulationStep = 0;
+    computePipeline = null;
+    initializePipeline = null;
+    computeBindGroups = null;
+    initializeBindGroups = null;
+    deviceFailure = null;
 }

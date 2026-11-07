@@ -28,7 +28,7 @@ public class App : Application
                     initialBirdCount = configuredBirdCount;
                 }
 
-                var simulation = new Simulation(count: initialBirdCount);
+                var simulation = new Simulation(count: initialBirdCount, deferInitialization: true);
                 var host = new GpuHost(simulation);
                 var window = new Window { Title = "Murmuration", Width = 1280, Height = 720, WindowState = WindowState.Maximized, Content = host };
                 host.FpsUpdated += fps => Dispatcher.UIThread.Post(() => window.Title = $"Murmuration - {simulation.Birds.Length} birds - {fps:F0} FPS");

@@ -9,7 +9,11 @@ This is an itch that I've been wanting to scratch for a long time.  Flock simula
 
 So every time I get a new PC I've wondered about how much better it could do, but it was never a high enough priority to actually make it happen. Then I realized that I could vibe-code the basics in an evening (the boring part), and then iterate on the behavior for days (the fun part). So here we are.
 
-I haven't done any real optimization yet, but a decent laptop can render a flock of 300-400 birds. It will automatically adjust the bird count depending on frame rate, so it should work reasonably well on a wide range of hardware. 
+The app automatically adjusts the bird count depending on frame rate, so it should work reasonably well on a wide range of hardware.
+
+Bird initialization, neighbor selection, and flight updates run in parallel on the WebGPU device, with bird state kept on the GPU between frames. If the compute pipeline cannot be created, the simulation falls back to the CPU while WebGPU continues to render. Frame timing and the adaptive bird count remain on the CPU. GPU and CPU runs use the same flock rules but can produce different trajectories.
+
+The GPU bird layout and simulation constants are generated from C#; the shared compute shader implements the simulation rules in WGSL. WebGPU is still required for rendering.
 
 ![A few hundred blue and green birds of 16 polygons each](misc/screenshot.png)
 
@@ -27,6 +31,12 @@ The saver covers connected displays and exits on keyboard input, mouse-button in
 
 The normal desktop app remains available by running `run.ps1`.
 
+### GPU Tests
+
+Run the test suite with `dotnet test src/Murmuration.Desktop.Tests/Murmuration.Desktop.Tests.csproj`. On Windows, the GPU tests use an available WebGPU adapter for shader compilation, readback comparisons, and rendering.
+
+To compare 120 fixed-population frames at 400 and 1,024 birds in Release mode, set `$env:MURMURATION_BENCHMARK = '1'` and run `dotnet test src/Murmuration.Desktop.Tests/Murmuration.Desktop.Tests.csproj -c Release --filter FullyQualifiedName~SimulationShaderMatchesCpuForOneStep --logger 'console;verbosity=detailed'`. The GPU time includes command submission and a final readback; it is not a GPU timestamp measurement. Remove the environment variable afterward with `Remove-Item Env:MURMURATION_BENCHMARK`.
+
 ### Ideas for the future
 
 * Flapping wings when climbing
@@ -34,7 +44,7 @@ The normal desktop app remains available by running `run.ps1`.
 * ~~Try averaging alignment with a few nearby birds instead of just the nearest neighbor.~~ (done)
 * Give the birds better geometry (they're rather flat)
 * Add UI to adjust behavior
-* Move simulation logic onto the GPU
+* ~~Move simulation logic onto the GPU~~ (done)
 * ???
 
 ### About That Quote

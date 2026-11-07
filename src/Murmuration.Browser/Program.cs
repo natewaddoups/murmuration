@@ -37,7 +37,7 @@ internal static class Program
         await AppBuilder.Configure<App>().StartBrowserAppAsync("out");
 
         var renderer = await WebGpuBrowserRenderer.CreateAsync("gpu");
-        var runner = new FrameRunner(new Simulation(count: 100), renderer);
+        var runner = new FrameRunner(new Simulation(count: 100, deferInitialization: true), renderer);
 
         void OnFrame(double ms)
         {
