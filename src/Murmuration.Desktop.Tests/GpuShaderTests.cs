@@ -192,6 +192,8 @@ public unsafe class GpuShaderTests
                 Bird actual = state[index].ToBird();
                 Assert.That(System.Numerics.Vector3.Distance(actual.DesiredDirection, birds[index].DesiredDirection), Is.LessThan(1e-4f), $"Desired direction {index}");
                 Assert.That(actual.Speed, Is.EqualTo(birds[index].Speed).Within(1e-4f), $"Speed {index}");
+                Assert.That(actual.FlapRate, Is.EqualTo(birds[index].FlapRate).Within(1e-4f), $"Flap rate {index}");
+                Assert.That(actual.PreferredFlapRate, Is.EqualTo(birds[index].PreferredFlapRate).Within(1e-4f), $"Preferred flap rate {index}");
             }
             gpu.BufferUnmap(readback);
             gpu.BufferUnmap(stateReadback);
@@ -255,6 +257,7 @@ public unsafe class GpuShaderTests
                     Assert.That(initialized.Mass, Is.InRange(0.25f, 0.5f));
                     Assert.That(initialized.ClimbStrength, Is.InRange(0.7f, 1.2f));
                     Assert.That(initialized.FlapRate, Is.InRange(3f, 4f));
+                    Assert.That(initialized.PreferredFlapRate, Is.EqualTo(initialized.FlapRate));
                     Assert.That(initialized.FlapPhase, Is.InRange(0f, MathF.Tau));
                     Assert.That(System.Numerics.Vector3.Distance(initialized.Direction, initialized.DesiredDirection), Is.LessThan(1e-4f));
                     Assert.That(initialized.Up.Length(), Is.EqualTo(1f).Within(1e-4f));

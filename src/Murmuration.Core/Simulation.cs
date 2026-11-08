@@ -17,8 +17,9 @@ public struct Bird
     public ClimbDirection Climb;
     public float ClimbStrength;
     public float FlapRate; // Hz
+    public float PreferredFlapRate; // Hz; FlapRate relaxes back to this when no neighbor is close
     public float FlapPhase; // radians in [0, 2π)
-    public readonly float FlapAngle => Simulation.FlapAmplitude * MathF.Sin(FlapPhase);
+    public readonly float FlapAngle => Simulation.FlapAmplitude(Direction.Z) * MathF.Sin(FlapPhase);
 }
 
 public sealed class Simulation
@@ -47,7 +48,14 @@ public sealed class Simulation
     private const float ClimbSpreadFraction = 0.01f;
     private const float FlapMinRate = 3f;
     private const float FlapMaxRate = 4f;
-    internal const float FlapAmplitude = 45f * MathF.PI / 180f;
+    private const float FlapRateChange = 1.0f; // Hz per second
+    private const float FlapRateTolerance = 0.1f; // fraction of the target rate
+    private const float FlapPhaseTolerance = 0.1f; // fraction of a cycle
+    // Flap amplitude is interpolated linearly in flight slope between these points; it is 0 at or below FlapDescentSlope.
+    private const float FlapDescentSlope = -10f * MathF.PI / 180f;
+    private const float FlapLevelAmplitude = 10f * MathF.PI / 180f;
+    private const float FlapClimbSlope = 45f * MathF.PI / 180f;
+    private const float FlapClimbAmplitude = 60f * MathF.PI / 180f;
     private static readonly float MaxAscentSin = MathF.Sin(30f * MathF.PI / 180f);
     private static readonly float MaxDescentSin = MathF.Sin(45f * MathF.PI / 180f);
     private static readonly float MinNeighborAlignment = MathF.Cos(90f * MathF.PI / 180f);
@@ -76,7 +84,13 @@ public sealed class Simulation
         const TAU: f32 = f32({MathF.Tau:R});
         const FlapMinRate: f32 = f32({FlapMinRate:R});
         const FlapMaxRate: f32 = f32({FlapMaxRate:R});
-        const FlapAmplitude: f32 = f32({FlapAmplitude:R});
+        const FlapRateChange: f32 = f32({FlapRateChange:R});
+        const FlapRateTolerance: f32 = f32({FlapRateTolerance:R});
+        const FlapPhaseTolerance: f32 = f32({FlapPhaseTolerance:R});
+        const FlapDescentSlope: f32 = f32({FlapDescentSlope:R});
+        const FlapLevelAmplitude: f32 = f32({FlapLevelAmplitude:R});
+        const FlapClimbSlope: f32 = f32({FlapClimbSlope:R});
+        const FlapClimbAmplitude: f32 = f32({FlapClimbAmplitude:R});
         const MaxAscentSin: f32 = f32({MaxAscentSin:R});
         const MaxDescentSin: f32 = f32({MaxDescentSin:R});
         const MinNeighborAlignment: f32 = f32({MinNeighborAlignment:R});
@@ -85,6 +99,7 @@ public sealed class Simulation
         """);
 
     private Vector3[] _directions = [];
+    private float[] _nextFlapRates = [];
     private float[,] _distances = new float[0, 0]; // squared distances between birds
     private readonly Random _rng;
     private readonly PopulationController _population = new();
@@ -115,6 +130,7 @@ public sealed class Simulation
 
         float preferredSpeed = Utility.Range(rng, 3, 3.25);
         Vector3 direction = Vector3.Normalize(dir);
+        float flapRate = Utility.Range(rng, FlapMinRate, FlapMaxRate);
         return new Bird
         {
             Orientation = Utility.CreateOrientation(direction, Vector3.UnitZ),
@@ -133,7 +149,8 @@ public sealed class Simulation
             Mass = Utility.Range(rng, 0.25f, 0.5f),
             Climb = ClimbDirection.Neither,
             ClimbStrength = Utility.Range(rng, 0.7f, 1.2f),
-            FlapRate = Utility.Range(rng, FlapMinRate, FlapMaxRate),
+            FlapRate = flapRate,
+            PreferredFlapRate = flapRate,
             FlapPhase = Utility.Range(rng, 0, MathF.Tau),
         };
     }
@@ -166,6 +183,7 @@ public sealed class Simulation
             Vector3 toUp = Vector3.Zero;
             Vector3 toDown = Vector3.Zero;
             Vector3 toLevel = Vector3.Zero;
+            float neighborFlapRate, neighborFlapPhase;
 
             bool stalled = bird.Speed < StallSpeed;
             if (stalled)
@@ -204,9 +222,12 @@ public sealed class Simulation
                     toCenter = Utility.SteeringDelta(direction, offset) * 0.5f;
             }
 
-            if (CheckNeighbors(i, out Vector3 targetDirection, out Vector3 targetPosition))
+            if (CheckNeighbors(i, out Vector3 targetDirection, out Vector3 targetPosition, out neighborFlapRate, out neighborFlapPhase))
             {
                 float targetDistance = Vector3.Distance(bird.Position, targetPosition);
+                if (targetDistance > CloseNeighborRange)
+                    neighborFlapRate = neighborFlapPhase = 0f;
+
                 if (targetDistance > CloseNeighborRange)
                     bird.Speed = MathF.Min(MaxSpeed, bird.Speed * (1f + FlockSpeedAdjustmentRate * dt));
                 else if (targetDistance < CloseNeighborRange)
@@ -242,7 +263,46 @@ public sealed class Simulation
                 toDown + 
                 toLevel;
             bird.DesiredDirection = ClampSlope(sum.LengthSquared() > 1e-12f ? Vector3.Normalize(sum) : direction, direction);
+            // Buffered so later birds still see this frame's original rates, matching the GPU's double buffering.
+            _nextFlapRates[i] = AdjustFlapRate(bird, neighborFlapRate, neighborFlapPhase, dt);
         }
+
+        for (int i = 0; i < birds.Length; i++)
+            birds[i].FlapRate = _nextFlapRates[i];
+    }
+
+    // Wing swing in radians for a flight direction's vertical component (sine of the climb angle).
+    internal static float FlapAmplitude(float directionZ)
+    {
+        float slope = MathF.Asin(Math.Clamp(directionZ, -1f, 1f));
+        if (slope <= FlapDescentSlope) return 0f;
+        if (slope < 0f) return FlapLevelAmplitude * (slope - FlapDescentSlope) / -FlapDescentSlope;
+        if (slope < FlapClimbSlope) return FlapLevelAmplitude + (FlapClimbAmplitude - FlapLevelAmplitude) * slope / FlapClimbSlope;
+        return FlapClimbAmplitude;
+    }
+
+    private static float PhaseDifference(float first, float second)
+    {
+        float difference = (first - second) % MathF.Tau;
+        if (difference > MathF.PI) difference -= MathF.Tau;
+        else if (difference < -MathF.PI) difference += MathF.Tau;
+        return difference;
+    }
+
+    // Ramps toward the nearest bird's rate, but holds a close rate until the phases line up; with no target, returns to the preferred rate.
+    private static float AdjustFlapRate(in Bird bird, float targetRate, float targetPhase, float dt)
+    {
+        float goal = bird.PreferredFlapRate;
+        if (targetRate > 0f)
+        {
+            if (MathF.Abs(bird.FlapRate - targetRate) <= FlapRateTolerance * targetRate &&
+                MathF.Abs(PhaseDifference(bird.FlapPhase, targetPhase)) > FlapPhaseTolerance * MathF.Tau)
+                return bird.FlapRate;
+            goal = targetRate;
+        }
+
+        float maxChange = FlapRateChange * dt;
+        return bird.FlapRate + Math.Clamp(goal - bird.FlapRate, -maxChange, maxChange);
     }
 
     private void Move(float dt)
@@ -299,6 +359,7 @@ public sealed class Simulation
         {
             _distances = new float[count, count];
             _directions = new Vector3[count];
+            _nextFlapRates = new float[count];
         }
 
         for (int i = 0; i < count; i++)
@@ -317,10 +378,12 @@ public sealed class Simulation
     // Determine the target direction and position based on nearby neighbors.
     // For close neighbors, aim for the nearest point on their perpendicular plane.
     // Otherwise, target the average position of the closest few eligible birds.
-    private bool CheckNeighbors(int index, out Vector3 targetDirection, out Vector3 targetPosition)
+    private bool CheckNeighbors(int index, out Vector3 targetDirection, out Vector3 targetPosition, out float flapRate, out float flapPhase)
     {
         targetPosition = default;
         targetDirection = default;
+        flapRate = 0f;
+        flapPhase = 0f;
         Vector3 position = Birds[index].Position;
         Vector3 forward = _directions[index];
 
@@ -355,6 +418,8 @@ public sealed class Simulation
 
         if (found == 0 || bestDistance[0] < 1e-12f) return false;
 
+        // Harmonize with the nearest bird.
+        Bird nearest = Birds[best[0]];
         // Sum the positions and directions of the found neighbors to compute averages.
         Vector3 sum = Vector3.Zero;
         Vector3 directionSum = Vector3.Zero;
@@ -382,6 +447,8 @@ public sealed class Simulation
             }
 
             targetPosition = closestPosition + Vector3.Normalize(inPlane) * NeighborDistance;
+            flapRate = nearest.FlapRate;
+            flapPhase = nearest.FlapPhase;
             return true;
         }
 
@@ -392,6 +459,8 @@ public sealed class Simulation
         // Move back along the line from this bird to the average position by NeighborDistance.
         // Without the distance offset, birds tend to line up single-file.
         targetPosition = average - Vector3.Normalize(toAverage) * NeighborDistance;
+        flapRate = nearest.FlapRate;
+        flapPhase = nearest.FlapPhase;
         return true;
     }
 

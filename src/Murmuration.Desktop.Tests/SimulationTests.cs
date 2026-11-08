@@ -70,9 +70,83 @@ public class SimulationTests
             foreach (Bird bird in simulation.Birds)
             {
                 Assert.That(bird.FlapPhase, Is.InRange(0f, MathF.Tau));
-                Assert.That(MathF.Abs(bird.FlapAngle), Is.LessThanOrEqualTo(MathF.PI / 4f + 1e-6f));
+                Assert.That(MathF.Abs(bird.FlapAngle), Is.LessThanOrEqualTo(MathF.PI / 3f + 1e-6f));
             }
         }
+    }
+
+    [Test]
+    public void NearbyBirdRampsFlapRateTowardNearestBird()
+    {
+        const float dt = 1f / 60f;
+        Simulation simulation = FlapPair(new Vector3(0, 0, 10), 3f, 3f, 0f, new Vector3(1, 0, 10), 4f, 4f, 0f);
+
+        simulation.Step(dt, 58);
+
+        Assert.That(simulation.Birds[0].FlapRate, Is.EqualTo(3f + 1f * dt).Within(1e-5f));
+        Assert.That(simulation.Birds[1].FlapRate, Is.EqualTo(4f));
+    }
+
+    [Test]
+    public void DistantNeighborLetsFlapRateReturnToPreferred()
+    {
+        const float dt = 1f / 60f;
+        Simulation simulation = FlapPair(new Vector3(0, 0, 10), 3.5f, 3f, 0f, new Vector3(30, 0, 10), 4f, 4f, 0f);
+
+        simulation.Step(dt, 58);
+
+        Assert.That(simulation.Birds[0].FlapRate, Is.EqualTo(3.5f - 1f * dt).Within(1e-5f));
+    }
+
+    [Test]
+    public void CloseRateHoldsUntilPhasesAlign()
+    {
+        const float dt = 1f / 60f;
+        Simulation apart = FlapPair(new Vector3(0, 0, 10), 3.8f, 3.8f, 0f, new Vector3(1, 0, 10), 4f, 4f, MathF.PI);
+        Simulation aligned = FlapPair(new Vector3(0, 0, 10), 3.8f, 3.8f, 0.1f, new Vector3(1, 0, 10), 4f, 4f, 0f);
+
+        apart.Step(dt, 58);
+        aligned.Step(dt, 58);
+
+        Assert.That(apart.Birds[0].FlapRate, Is.EqualTo(3.8f));
+        Assert.That(aligned.Birds[0].FlapRate, Is.EqualTo(3.8f + 1f * dt).Within(1e-5f));
+    }
+
+    private static Simulation FlapPair(Vector3 firstPosition, float firstRate, float firstPreferred, float firstPhase,
+        Vector3 secondPosition, float secondRate, float secondPreferred, float secondPhase)
+    {
+        static Bird Create(Vector3 position, float rate, float preferred, float phase) => new()
+        {
+            Position = position,
+            Orientation = Quaternion.Identity,
+            DesiredDirection = Vector3.UnitX,
+            Speed = 3f,
+            PreferredSpeed = 3f,
+            Mass = 0.3f,
+            FlapRate = rate,
+            PreferredFlapRate = preferred,
+            FlapPhase = phase,
+        };
+
+        var simulation = new Simulation(2, 1);
+        simulation.Birds[0] = Create(firstPosition, firstRate, firstPreferred, firstPhase);
+        simulation.Birds[1] = Create(secondPosition, secondRate, secondPreferred, secondPhase);
+        return simulation;
+    }
+
+    [Test]
+    public void FlapAmplitudeInterpolatesWithClimbAngle()
+    {
+        static float Amplitude(float degrees) =>
+            Simulation.FlapAmplitude(MathF.Sin(degrees * MathF.PI / 180f)) * 180f / MathF.PI;
+
+        Assert.That(Amplitude(-30f), Is.EqualTo(0f).Within(1e-3f));
+        Assert.That(Amplitude(-10f), Is.EqualTo(0f).Within(1e-3f));
+        Assert.That(Amplitude(-5f), Is.EqualTo(5f).Within(1e-3f));
+        Assert.That(Amplitude(0f), Is.EqualTo(10f).Within(1e-3f));
+        Assert.That(Amplitude(22.5f), Is.EqualTo(35f).Within(1e-3f));
+        Assert.That(Amplitude(45f), Is.EqualTo(60f).Within(1e-3f));
+        Assert.That(Amplitude(80f), Is.EqualTo(60f).Within(1e-3f));
     }
 
     [Test]

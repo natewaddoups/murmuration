@@ -21,6 +21,7 @@ public class GpuBirdTests
             Climb = ClimbDirection.Right,
             ClimbStrength = 14f,
             FlapRate = 3.5f,
+            PreferredFlapRate = 3.25f,
             FlapPhase = 1.25f,
         };
 
