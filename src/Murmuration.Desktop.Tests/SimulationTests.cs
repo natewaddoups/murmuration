@@ -40,6 +40,53 @@ public class SimulationTests
     }
 
     [Test]
+    public void BirdsStartWithOwnFlapRateAndPhase()
+    {
+        var simulation = new Simulation(64, 42);
+
+        Assert.That(simulation.Birds.All(bird => bird.FlapRate is >= 3f and <= 4f), Is.True);
+        Assert.That(simulation.Birds.All(bird => bird.FlapPhase is >= 0f and < MathF.Tau), Is.True);
+        Assert.That(simulation.Birds.Select(bird => bird.FlapRate).Distinct().Count(), Is.GreaterThan(1));
+    }
+
+    [Test]
+    public void FlapPhaseAdvancesByRateAndStaysWithinAmplitude()
+    {
+        var simulation = new Simulation(8, 42);
+        Bird[] before = simulation.Birds.ToArray();
+        const float dt = 1f / 60f;
+
+        simulation.Step(dt, 60);
+
+        for (int i = 0; i < before.Length; i++)
+        {
+            float expected = (before[i].FlapPhase + MathF.Tau * before[i].FlapRate * dt) % MathF.Tau;
+            Assert.That(simulation.Birds[i].FlapPhase, Is.EqualTo(expected).Within(1e-5f));
+        }
+
+        for (int frame = 0; frame < 120; frame++)
+        {
+            simulation.Step(dt, 60);
+            foreach (Bird bird in simulation.Birds)
+            {
+                Assert.That(bird.FlapPhase, Is.InRange(0f, MathF.Tau));
+                Assert.That(MathF.Abs(bird.FlapAngle), Is.LessThanOrEqualTo(MathF.PI / 4f + 1e-6f));
+            }
+        }
+    }
+
+    [Test]
+    public void ZeroDeltaDoesNotAdvanceFlapPhase()
+    {
+        var simulation = new Simulation(8, 42);
+        float[] phases = simulation.Birds.Select(bird => bird.FlapPhase).ToArray();
+
+        simulation.Step(0f, 60);
+
+        Assert.That(simulation.Birds.Select(bird => bird.FlapPhase), Is.EqualTo(phases));
+    }
+
+    [Test]
     public void ZeroDeltaDoesNotMoveBirds()
     {
         var simulation = new Simulation(16, 42);

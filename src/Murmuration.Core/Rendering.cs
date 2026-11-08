@@ -93,6 +93,7 @@ public sealed class FrameRunner
                     Position = birds[i].Position,
                     Direction = birds[i].Direction,
                     Up = birds[i].Up,
+                    FlapAngle = birds[i].FlapAngle,
                 };
             }
 

@@ -291,17 +291,19 @@ public sealed unsafe class WebGpuDesktopRenderer : IGpuSimulationRenderer
         var entryVs = (byte*)SilkMarshal.StringToPtr("vs");
         var entryFs = (byte*)SilkMarshal.StringToPtr("fs");
 
-        var vertexAttributes = stackalloc VertexAttribute[2];
+        var vertexAttributes = stackalloc VertexAttribute[3];
         vertexAttributes[0] = new VertexAttribute { Format = VertexFormat.Float32x3, Offset = 0, ShaderLocation = 0 };
         vertexAttributes[1] = new VertexAttribute { Format = VertexFormat.Float32x3, Offset = 12, ShaderLocation = 1 };
-        var instanceAttributes = stackalloc VertexAttribute[3];
+        vertexAttributes[2] = new VertexAttribute { Format = VertexFormat.Float32, Offset = 24, ShaderLocation = 5 };
+        var instanceAttributes = stackalloc VertexAttribute[4];
         instanceAttributes[0] = new VertexAttribute { Format = VertexFormat.Float32x3, Offset = 0, ShaderLocation = 2 };
         instanceAttributes[1] = new VertexAttribute { Format = VertexFormat.Float32x3, Offset = 12, ShaderLocation = 3 };
         instanceAttributes[2] = new VertexAttribute { Format = VertexFormat.Float32x3, Offset = 24, ShaderLocation = 4 };
+        instanceAttributes[3] = new VertexAttribute { Format = VertexFormat.Float32, Offset = 36, ShaderLocation = 6 };
 
         var layouts = stackalloc VertexBufferLayout[2];
-        layouts[0] = new VertexBufferLayout { ArrayStride = (ulong)sizeof(Vertex), StepMode = VertexStepMode.Vertex, AttributeCount = 2, Attributes = vertexAttributes };
-        layouts[1] = new VertexBufferLayout { ArrayStride = (ulong)sizeof(InstanceData), StepMode = VertexStepMode.Instance, AttributeCount = 3, Attributes = instanceAttributes };
+        layouts[0] = new VertexBufferLayout { ArrayStride = (ulong)sizeof(Vertex), StepMode = VertexStepMode.Vertex, AttributeCount = 3, Attributes = vertexAttributes };
+        layouts[1] = new VertexBufferLayout { ArrayStride = (ulong)sizeof(InstanceData), StepMode = VertexStepMode.Instance, AttributeCount = 4, Attributes = instanceAttributes };
 
         var colorTarget = new ColorTargetState { Format = _format, WriteMask = ColorWriteMask.All };
         var fragment = new FragmentState { Module = module, EntryPoint = entryFs, TargetCount = 1, Targets = &colorTarget };

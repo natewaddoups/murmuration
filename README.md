@@ -3,7 +3,9 @@
 "in the stackyard there was a great murmuration of starlings"\
 — Mary Webb
 
-[Click here](https://natewaddoups.github.io/murmuration/) to run it in your web browser.
+If you have a GPU, [click here](https://natewaddoups.github.io/murmuration/?initial=500) to run it in your web browser with 500 birds.
+
+If you don't have a GPU, [click here instead](https://natewaddoups.github.io/murmuration/?initial=100) to start with 100 birds.
 
 This is an itch that I've been wanting to scratch for a long time.  Flock simulation dates back to at least 1986, when Craig Reynolds published his *Boids* paper at [SIGGRAPH](https://en.wikipedia.org/wiki/SIGGRAPH). I wrote one in college several years later, which was deeply disappointing due to the lack of computing power - a couple dozen "birds" in two dimensions just isn't that interesting. 
 

@@ -172,6 +172,8 @@ fn initialize(@builtin(global_invocation_id) id: vec3<u32>) {
     bird.DirectionX = direction.x;
     bird.DirectionY = direction.y;
     bird.DirectionZ = direction.z;
+    bird.Flap = vec4<f32>(FlapMinRate + initialRandom(index, 9u) * (FlapMaxRate - FlapMinRate),
+        initialRandom(index, 10u) * TAU, 0.0, 0.0);
     birdsOut[index] = bird;
 }
 
@@ -302,6 +304,7 @@ fn updateBird(index: u32, input: GpuBird, delta: f32, localIndex: u32) -> GpuBir
     }
     bird.Flight.x = clamp(bird.Flight.x, MinSpeed, MaxSpeed);
     bird.Position = vec4<f32>(position + newDirection * bird.Flight.x * delta, 0.0);
+    bird.Flap.y = (bird.Flap.y + TAU * bird.Flap.x * delta) % TAU;
     if (direction.z <= 0.0 && newDirection.z > 0.0) {
         let roll = randomValue(index ^ simulation.seed, simulation.step);
         bird.Climb = select(select(0u, 2u, roll < ClimbSpreadFraction * 2.0), 1u, roll < ClimbSpreadFraction);
@@ -319,7 +322,7 @@ fn simulate(@builtin(global_invocation_id) id: vec3<u32>, @builtin(local_invocat
     birdsOut[index] = bird;
     let direction = vec3<f32>(bird.DirectionX, bird.DirectionY, bird.DirectionZ);
     let up = rotate(vec3<f32>(0.0, 0.0, 1.0), bird.Orientation);
-    let offset = index * 9u;
+    let offset = index * 10u;
     instances[offset] = bird.Position.x;
     instances[offset + 1u] = bird.Position.y;
     instances[offset + 2u] = bird.Position.z;
@@ -329,4 +332,5 @@ fn simulate(@builtin(global_invocation_id) id: vec3<u32>, @builtin(local_invocat
     instances[offset + 6u] = up.x;
     instances[offset + 7u] = up.y;
     instances[offset + 8u] = up.z;
+    instances[offset + 9u] = FlapAmplitude * sin(bird.Flap.y);
 }

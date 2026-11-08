@@ -1,4 +1,4 @@
-const VERTEX_STRIDE = 24;
+const VERTEX_STRIDE = 28;
 
 let device, context, canvas, format, pipeline, bindGroup;
 let uniformBuffer, birdBuffer, groundBuffer, instanceBuffer, groundInstanceBuffer;
@@ -54,6 +54,7 @@ export function createResources(shaderSource, birdBytes, groundBytes, groundInst
                     attributes: [
                         { shaderLocation: 0, offset: 0, format: 'float32x3' },
                         { shaderLocation: 1, offset: 12, format: 'float32x3' },
+                        { shaderLocation: 5, offset: 24, format: 'float32' },
                     ],
                 },
                 {
@@ -63,6 +64,7 @@ export function createResources(shaderSource, birdBytes, groundBytes, groundInst
                         { shaderLocation: 2, offset: 0, format: 'float32x3' },
                         { shaderLocation: 3, offset: 12, format: 'float32x3' },
                         { shaderLocation: 4, offset: 24, format: 'float32x3' },
+                        { shaderLocation: 6, offset: 36, format: 'float32' },
                     ],
                 },
             ],

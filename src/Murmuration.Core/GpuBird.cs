@@ -17,6 +17,7 @@ public struct GpuBird
     public float DirectionX;
     public float DirectionY;
     public float DirectionZ;
+    public Vector4 Flap; // rate (Hz), phase (radians), unused, unused
 
     public static GpuBird FromBird(in Bird bird) => new()
     {
@@ -28,6 +29,7 @@ public struct GpuBird
         DirectionX = bird.Direction.X,
         DirectionY = bird.Direction.Y,
         DirectionZ = bird.Direction.Z,
+        Flap = new Vector4(bird.FlapRate, bird.FlapPhase, 0f, 0f),
     };
 
     public readonly Bird ToBird() => new()
@@ -40,6 +42,8 @@ public struct GpuBird
         Mass = Flight.Z,
         ClimbStrength = Flight.W,
         Climb = (ClimbDirection)Climb,
+        FlapRate = Flap.X,
+        FlapPhase = Flap.Y,
     };
 
     [DynamicDependency(DynamicallyAccessedMemberTypes.PublicFields, typeof(GpuBird))]

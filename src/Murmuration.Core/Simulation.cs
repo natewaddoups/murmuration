@@ -16,11 +16,14 @@ public struct Bird
     public float Mass;
     public ClimbDirection Climb;
     public float ClimbStrength;
+    public float FlapRate; // Hz
+    public float FlapPhase; // radians in [0, 2π)
+    public readonly float FlapAngle => Simulation.FlapAmplitude * MathF.Sin(FlapPhase);
 }
 
 public sealed class Simulation
 {
-    public static readonly Vector3 Center = new(0, 0, SoftCeiling * 0.75f);
+    public static readonly Vector3 Center = new(0, 0, SoftCeiling * 0.62f);
     private const float NeighborDistance = 1.0f; // smaller values lead to single-file formations
     private const float CloseNeighborRange = 2f;
     private const float NeighborRange = 50.0f;
@@ -42,6 +45,9 @@ public sealed class Simulation
     private const float SoftFloor = 5f;
     private const float SoftCeiling = 20f;
     private const float ClimbSpreadFraction = 0.01f;
+    private const float FlapMinRate = 3f;
+    private const float FlapMaxRate = 4f;
+    internal const float FlapAmplitude = 45f * MathF.PI / 180f;
     private static readonly float MaxAscentSin = MathF.Sin(30f * MathF.PI / 180f);
     private static readonly float MaxDescentSin = MathF.Sin(45f * MathF.PI / 180f);
     private static readonly float MinNeighborAlignment = MathF.Cos(90f * MathF.PI / 180f);
@@ -67,6 +73,10 @@ public sealed class Simulation
         const SoftFloor: f32 = f32({SoftFloor:R});
         const SoftCeiling: f32 = f32({SoftCeiling:R});
         const ClimbSpreadFraction: f32 = f32({ClimbSpreadFraction:R});
+        const TAU: f32 = f32({MathF.Tau:R});
+        const FlapMinRate: f32 = f32({FlapMinRate:R});
+        const FlapMaxRate: f32 = f32({FlapMaxRate:R});
+        const FlapAmplitude: f32 = f32({FlapAmplitude:R});
         const MaxAscentSin: f32 = f32({MaxAscentSin:R});
         const MaxDescentSin: f32 = f32({MaxDescentSin:R});
         const MinNeighborAlignment: f32 = f32({MinNeighborAlignment:R});
@@ -123,6 +133,8 @@ public sealed class Simulation
             Mass = Utility.Range(rng, 0.25f, 0.5f),
             Climb = ClimbDirection.Neither,
             ClimbStrength = Utility.Range(rng, 0.7f, 1.2f),
+            FlapRate = Utility.Range(rng, FlapMinRate, FlapMaxRate),
+            FlapPhase = Utility.Range(rng, 0, MathF.Tau),
         };
     }
 
@@ -263,6 +275,7 @@ public sealed class Simulation
 
             // and update position based on new direction and speed.
             bird.Position += newDirection * bird.Speed * dt;
+            bird.FlapPhase = (bird.FlapPhase + MathF.Tau * bird.FlapRate * dt) % MathF.Tau;
 
             // This is really more of a "think" operation, but it depends on direction change, which is computed in this functions.
             // If transitioning to climb from level flight, a fraction of birds will pick a direction to diverge.

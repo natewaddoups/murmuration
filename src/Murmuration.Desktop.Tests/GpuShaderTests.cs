@@ -188,6 +188,7 @@ public unsafe class GpuShaderTests
                 Assert.That(System.Numerics.Vector3.Distance(result[index].Position, birds[index].Position), Is.LessThan(1e-4f), $"Position {index}");
                 Assert.That(System.Numerics.Vector3.Distance(result[index].Direction, birds[index].Direction), Is.LessThan(1e-4f), $"Direction {index}");
                 Assert.That(System.Numerics.Vector3.Distance(result[index].Up, birds[index].Up), Is.LessThan(1e-4f), $"Up {index}");
+                Assert.That(result[index].FlapAngle, Is.EqualTo(birds[index].FlapAngle).Within(1e-3f), $"Flap angle {index}");
                 Bird actual = state[index].ToBird();
                 Assert.That(System.Numerics.Vector3.Distance(actual.DesiredDirection, birds[index].DesiredDirection), Is.LessThan(1e-4f), $"Desired direction {index}");
                 Assert.That(actual.Speed, Is.EqualTo(birds[index].Speed).Within(1e-4f), $"Speed {index}");
@@ -253,6 +254,8 @@ public unsafe class GpuShaderTests
                     Assert.That(initialized.Speed, Is.InRange(3f, 3.25f));
                     Assert.That(initialized.Mass, Is.InRange(0.25f, 0.5f));
                     Assert.That(initialized.ClimbStrength, Is.InRange(0.7f, 1.2f));
+                    Assert.That(initialized.FlapRate, Is.InRange(3f, 4f));
+                    Assert.That(initialized.FlapPhase, Is.InRange(0f, MathF.Tau));
                     Assert.That(System.Numerics.Vector3.Distance(initialized.Direction, initialized.DesiredDirection), Is.LessThan(1e-4f));
                     Assert.That(initialized.Up.Length(), Is.EqualTo(1f).Within(1e-4f));
                     if (phase == 0) initialPositions[index] = initialized.Position;
