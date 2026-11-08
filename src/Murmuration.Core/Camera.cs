@@ -6,7 +6,7 @@ public enum CameraMode { Original, TopDown, Bird }
 
 public static class Camera
 {
-    private static readonly Vector3 Eye = new(-10, -10, 0);
+    private static readonly Vector3 Eye = new(-20, -20, 0);
     private static readonly Vector3 Target = Simulation.Center;
 
     // Same convention as Bird: X forward, Z up.

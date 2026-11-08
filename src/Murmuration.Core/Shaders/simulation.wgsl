@@ -161,7 +161,7 @@ fn initialize(@builtin(global_invocation_id) id: vec3<u32>) {
         40.0 + initialRandom(index, 5u) * 10.0, 0.0);
     if (simulation.firstNewBird == 0u && simulation.step == 0u) {
         position = vec3<f32>(initialRandom(index, 4u) * 100.0 - 50.0,
-            initialRandom(index, 5u) * 100.0 - 50.0, 40.0 + initialRandom(index, 6u) * 10.0);
+            initialRandom(index, 5u) * 100.0 - 50.0, initialRandom(index, 6u) * SoftCeiling);
     }
     var bird: GpuBird;
     bird.Position = vec4<f32>(position, 0.0);

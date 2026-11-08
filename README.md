@@ -11,6 +11,8 @@ So every time I get a new PC I've wondered about how much better it could do, bu
 
 The app automatically adjusts the bird count depending on frame rate, so it should work reasonably well on a wide range of hardware.
 
+In the browser, use `?initial=100` to set the starting bird count (default: 100). The `current` query parameter is updated as the population changes; it reports the count but does not set it on startup.
+
 Bird initialization, neighbor selection, and flight updates run in parallel on the WebGPU device, with bird state kept on the GPU between frames. If the compute pipeline cannot be created, the simulation falls back to the CPU while WebGPU continues to render. Frame timing and the adaptive bird count remain on the CPU. GPU and CPU runs use the same flock rules but can produce different trajectories.
 
 The GPU bird layout and simulation constants are generated from C#; the shared compute shader implements the simulation rules in WGSL. WebGPU is still required for rendering.

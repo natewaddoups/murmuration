@@ -20,7 +20,7 @@ public struct Bird
 
 public sealed class Simulation
 {
-    public static readonly Vector3 Center = new(0, 0, 25);
+    public static readonly Vector3 Center = new(0, 0, SoftCeiling * 0.75f);
     private const float NeighborDistance = 1.0f; // smaller values lead to single-file formations
     private const float CloseNeighborRange = 2f;
     private const float NeighborRange = 50.0f;
@@ -39,8 +39,8 @@ public sealed class Simulation
     private const float SpeedRelaxRate = 1.0f;
     private const float FlockSpeedAdjustmentRate = 0.10f;
     private const float SlopeSpeedGain = 0.5f;
-    private const float SoftFloor = 20f;
-    private const float SoftCeiling = 30f;
+    private const float SoftFloor = 5f;
+    private const float SoftCeiling = 20f;
     private const float ClimbSpreadFraction = 0.01f;
     private static readonly float MaxAscentSin = MathF.Sin(30f * MathF.PI / 180f);
     private static readonly float MaxDescentSin = MathF.Sin(45f * MathF.PI / 180f);
@@ -110,8 +110,14 @@ public sealed class Simulation
             Orientation = Utility.CreateOrientation(direction, Vector3.UnitZ),
             DesiredDirection = direction,
             Position = startup ?
-                new Vector3(Utility.Range(rng, -50, 50), Utility.Range(rng, -50, 50), Utility.Range(rng, 40, 50)) :
-                new Vector3(Utility.Range(rng, 30, 50), Utility.Range(rng, 40, 50), 0),
+                new Vector3(
+                    Utility.Range(rng, -50, 50),
+                    Utility.Range(rng, -50, 50),
+                    Utility.Range(rng, 0, SoftCeiling)) :
+                new Vector3(
+                    Utility.Range(rng, 30, 50),
+                    Utility.Range(rng, 40, 50),
+                    0),
             Speed = preferredSpeed,
             PreferredSpeed = preferredSpeed,
             Mass = Utility.Range(rng, 0.25f, 0.5f),

@@ -37,13 +37,21 @@ internal static class Program
         await AppBuilder.Configure<App>().StartBrowserAppAsync("out");
 
         var renderer = await WebGpuBrowserRenderer.CreateAsync("gpu");
-        var runner = new FrameRunner(new Simulation(count: 100, deferInitialization: true), renderer);
+        var simulation = new Simulation(count: WebGpuBrowserRenderer.GetInitialBirdCount(), deferInitialization: true);
+        var runner = new FrameRunner(simulation, renderer);
+        int currentBirdCount = simulation.Birds.Length;
+        WebGpuBrowserRenderer.UpdateCurrentBirdCount(currentBirdCount);
 
         void OnFrame(double ms)
         {
             runner.Paused = App.Paused;
             var (width, height) = renderer.SyncSize();
             runner.Frame(ms / 1000.0, width, height);
+            if (simulation.Birds.Length != currentBirdCount)
+            {
+                currentBirdCount = simulation.Birds.Length;
+                WebGpuBrowserRenderer.UpdateCurrentBirdCount(currentBirdCount);
+            }
             WebGpuBrowserRenderer.RequestFrame(OnFrame);
         }
         WebGpuBrowserRenderer.RequestFrame(OnFrame);

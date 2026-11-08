@@ -9,15 +9,52 @@ public sealed class ScreenSaverArgumentsTests
     [Test]
     public void EmptyArgumentsSelectInteractiveMode()
     {
-        Assert.That(ScreenSaverArguments.TryParse([], out var options, out var error), Is.True, error);
+        Assert.That(CommandLineArguments.TryParse([], out var options, out var error), Is.True, error);
         Assert.That(options.Mode, Is.EqualTo(StartupMode.Interactive));
+        Assert.That(options.InitialBirdCount, Is.Null);
+    }
+
+    [TestCase("/count", "37")]
+    [TestCase("/COUNT", "37")]
+    [TestCase("/count:37", null)]
+    public void CountSwitchParsesPositiveInitialBirdCount(string first, string? second)
+    {
+        string[] args = second is null ? [first] : [first, second];
+        Assert.That(CommandLineArguments.TryParse(args, out var options, out var error), Is.True, error);
+        Assert.That(options.Mode, Is.EqualTo(StartupMode.Interactive));
+        Assert.That(options.InitialBirdCount, Is.EqualTo(37));
+    }
+
+    [TestCase("/count", "0")]
+    [TestCase("/count", "-1")]
+    [TestCase("/count", "invalid")]
+    [TestCase("/count:invalid", null)]
+    [TestCase("/count", null)]
+    public void MissingOrInvalidCountLeavesInitialBirdCountUnset(string first, string? second)
+    {
+        string[] args = second is null ? [first] : [first, second];
+        Assert.That(CommandLineArguments.TryParse(args, out var options, out var error), Is.True, error);
+        Assert.That(options.InitialBirdCount, Is.Null);
+    }
+
+    [Test]
+    public void CommandLineCountTakesPrecedenceOverEnvironment()
+    {
+        Assert.That(CommandLineArguments.ResolveInitialBirdCount(250, "80"), Is.EqualTo(250));
+    }
+
+    [Test]
+    public void EnvironmentCountIsUsedWhenCommandLineCountIsMissingOrInvalid()
+    {
+        Assert.That(CommandLineArguments.ResolveInitialBirdCount(null, "80"), Is.EqualTo(80));
+        Assert.That(CommandLineArguments.ResolveInitialBirdCount(null, "invalid"), Is.EqualTo(100));
     }
 
     [TestCase("/s")]
     [TestCase("/S")]
     public void SaverSwitchIsCaseInsensitive(string argument)
     {
-        Assert.That(ScreenSaverArguments.TryParse([argument], out var options, out var error), Is.True, error);
+        Assert.That(CommandLineArguments.TryParse([argument], out var options, out var error), Is.True, error);
         Assert.That(options.Mode, Is.EqualTo(StartupMode.ScreenSaver));
     }
 
@@ -26,7 +63,7 @@ public sealed class ScreenSaverArgumentsTests
     public void PreviewSwitchParsesParentHandle(string first, string? second)
     {
         string[] args = second is null ? [first] : [first, second];
-        Assert.That(ScreenSaverArguments.TryParse(args, out var options, out var error), Is.True, error);
+        Assert.That(CommandLineArguments.TryParse(args, out var options, out var error), Is.True, error);
         Assert.That(options.Mode, Is.EqualTo(StartupMode.Preview));
         Assert.That(options.ParentWindow, Is.EqualTo(new IntPtr(123)));
     }
@@ -35,7 +72,7 @@ public sealed class ScreenSaverArgumentsTests
     [TestCase("/c:123")]
     public void ConfigureSwitchSelectsInformationalMode(string argument)
     {
-        Assert.That(ScreenSaverArguments.TryParse([argument], out var options, out var error), Is.True, error);
+        Assert.That(CommandLineArguments.TryParse([argument], out var options, out var error), Is.True, error);
         Assert.That(options.Mode, Is.EqualTo(StartupMode.Configure));
     }
 
@@ -45,7 +82,7 @@ public sealed class ScreenSaverArgumentsTests
     [TestCase("/unknown")]
     public void InvalidArgumentsAreRejected(string argument)
     {
-        Assert.That(ScreenSaverArguments.TryParse([argument], out _, out var error), Is.False);
+        Assert.That(CommandLineArguments.TryParse([argument], out _, out var error), Is.False);
         Assert.That(error, Is.Not.Null.And.Not.Empty);
     }
 

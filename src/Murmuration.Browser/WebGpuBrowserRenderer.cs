@@ -75,6 +75,12 @@ internal sealed partial class WebGpuBrowserRenderer : IGpuSimulationRenderer
     [JSImport("getMaxBirds", "webgpu-renderer")]
     private static partial int GetMaxBirds();
 
+    [JSImport("getInitialBirdCount", "webgpu-renderer")]
+    public static partial int GetInitialBirdCount();
+
+    [JSImport("updateCurrentBirdCount", "webgpu-renderer")]
+    public static partial void UpdateCurrentBirdCount(int count);
+
     [JSImport("syncSize", "webgpu-renderer")]
     private static partial void SyncCanvasSize();
 

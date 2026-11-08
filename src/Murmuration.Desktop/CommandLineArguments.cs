@@ -10,9 +10,9 @@ internal enum StartupMode
     Configure,
 }
 
-internal readonly record struct StartupOptions(StartupMode Mode, IntPtr ParentWindow = default);
+internal readonly record struct StartupOptions(StartupMode Mode, IntPtr ParentWindow = default, int? InitialBirdCount = null);
 
-internal static class ScreenSaverArguments
+internal static class CommandLineArguments
 {
     public static bool TryParse(string[] args, out StartupOptions options, out string? error)
     {
@@ -21,6 +21,21 @@ internal static class ScreenSaverArguments
 
         if (args.Length == 0)
             return true;
+
+        if (args.Length == 1 && string.Equals(args[0], "/count", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (args.Length == 2 && string.Equals(args[0], "/count", StringComparison.OrdinalIgnoreCase))
+        {
+            options = new StartupOptions(StartupMode.Interactive, InitialBirdCount: ParseBirdCount(args[1]));
+            return true;
+        }
+
+        if (args.Length == 1 && args[0].StartsWith("/count:", StringComparison.OrdinalIgnoreCase))
+        {
+            options = new StartupOptions(StartupMode.Interactive, InitialBirdCount: ParseBirdCount(args[0][7..]));
+            return true;
+        }
 
         if (args.Length == 1 && string.Equals(args[0], "/s", StringComparison.OrdinalIgnoreCase))
         {
@@ -43,9 +58,25 @@ internal static class ScreenSaverArguments
         if (args.Length == 1 && args[0].StartsWith("/c:", StringComparison.OrdinalIgnoreCase))
             return TryParseHandle(args[0][3..], StartupMode.Configure, out options, out error);
 
-        error = "Expected no arguments, /s, /p <HWND>, /p:<HWND>, /c, or /c:<HWND>.";
+        error = "Expected no arguments, /s, /p <HWND>, /p:<HWND>, /c, /c:<HWND>, or /count <positive integer>.";
         return false;
     }
+
+    public static int ResolveInitialBirdCount(int? commandLineCount, string? environmentValue)
+    {
+        if (commandLineCount is > 0)
+            return commandLineCount.Value;
+
+        if (int.TryParse(environmentValue, out int configuredBirdCount) && configuredBirdCount > 0)
+            return configuredBirdCount;
+
+        return 100;
+    }
+
+    private static int? ParseBirdCount(string value) =>
+        int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out int count) && count > 0
+            ? count
+            : null;
 
     private static bool TryParseHandle(string value, StartupMode mode, out StartupOptions options, out string? error)
     {

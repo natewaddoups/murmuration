@@ -98,6 +98,19 @@ export async function createCompute(simulationSource) {
 
 export function getMaxBirds() { return maxBirds; }
 
+export function getInitialBirdCount() {
+    const value = new URL(window.location.href).searchParams.get('initial');
+    if (value === null || !/^\d+$/.test(value)) return 100;
+    const count = Number(value);
+    return Number.isSafeInteger(count) && count > 0 && count <= 2147483647 ? count : 100;
+}
+
+export function updateCurrentBirdCount(count) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('current', String(count));
+    window.history.replaceState(window.history.state, '', url);
+}
+
 function ensureCapacity(count) {
     if (deviceFailure) throw new Error(deviceFailure);
     if (count > maxBirds) throw new Error(`At most ${maxBirds} birds are supported by this device.`);

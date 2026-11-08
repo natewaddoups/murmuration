@@ -249,7 +249,7 @@ public unsafe class GpuShaderTests
                     Bird initialized = state[index].ToBird();
                     Assert.That(initialized.Position.X, Is.InRange(phase == 1 ? 30f : -50f, 50f));
                     Assert.That(initialized.Position.Y, Is.InRange(phase == 1 ? 40f : -50f, 50f));
-                    Assert.That(initialized.Position.Z, Is.InRange(phase == 1 ? 0f : 40f, phase == 1 ? 0f : 50f));
+                    Assert.That(initialized.Position.Z, Is.InRange(0f, phase == 1 ? 0f : 20f));
                     Assert.That(initialized.Speed, Is.InRange(3f, 3.25f));
                     Assert.That(initialized.Mass, Is.InRange(0.25f, 0.5f));
                     Assert.That(initialized.ClimbStrength, Is.InRange(0.7f, 1.2f));

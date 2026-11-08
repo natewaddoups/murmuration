@@ -21,12 +21,9 @@ public class App : Application
             }
             else
             {
-                int initialBirdCount = 100;
-                if (int.TryParse(Environment.GetEnvironmentVariable("INITIAL_BIRD_COUNT"), out int configuredBirdCount)
-                    && configuredBirdCount > 0)
-                {
-                    initialBirdCount = configuredBirdCount;
-                }
+                int initialBirdCount = CommandLineArguments.ResolveInitialBirdCount(
+                    Program.Options.InitialBirdCount,
+                    Environment.GetEnvironmentVariable("INITIAL_BIRD_COUNT"));
 
                 var simulation = new Simulation(count: initialBirdCount, deferInitialization: true);
                 var host = new GpuHost(simulation);
@@ -52,7 +49,7 @@ public static class Program
     [STAThread]
     public static void Main(string[] args)
     {
-        if (!ScreenSaverArguments.TryParse(args, out var options, out string? error))
+        if (!CommandLineArguments.TryParse(args, out var options, out string? error))
         {
             ScreenSaverPlatform.ShowMessage(IntPtr.Zero, error!, "Murmuration", error: true);
             return;
