@@ -21,7 +21,11 @@ public class App : Application
             }
             else
             {
-                var simulation = new Simulation(count: 100);
+                int initialBirdCount = CommandLineArguments.ResolveInitialBirdCount(
+                    Program.Options.InitialBirdCount,
+                    Environment.GetEnvironmentVariable("INITIAL_BIRD_COUNT"));
+
+                var simulation = new Simulation(count: initialBirdCount, deferInitialization: true);
                 var host = new GpuHost(simulation);
                 var window = new Window { Title = "Murmuration", Width = 1280, Height = 720, WindowState = WindowState.Maximized, Content = host };
                 host.FpsUpdated += fps => Dispatcher.UIThread.Post(() => window.Title = $"Murmuration - {simulation.Birds.Length} birds - {fps:F0} FPS");
@@ -45,7 +49,7 @@ public static class Program
     [STAThread]
     public static void Main(string[] args)
     {
-        if (!ScreenSaverArguments.TryParse(args, out var options, out string? error))
+        if (!CommandLineArguments.TryParse(args, out var options, out string? error))
         {
             ScreenSaverPlatform.ShowMessage(IntPtr.Zero, error!, "Murmuration", error: true);
             return;

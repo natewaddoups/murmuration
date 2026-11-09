@@ -6,6 +6,7 @@ namespace Murmuration;
 public static class ShaderSources
 {
     public static string Render { get; } = Read("render.wgsl");
+    public static string Simulation { get; } = GpuBird.WgslDeclaration() + Murmuration.Simulation.WgslConstants + Read("simulation.wgsl");
 
     private static string Read(string name)
     {
@@ -21,6 +22,14 @@ public interface IGpuRenderer : IDisposable
     void Render(ReadOnlySpan<InstanceData> birds, in Matrix4x4 viewProj, int width, int height);
 }
 
+public interface IGpuSimulationRenderer : IGpuRenderer
+{
+    bool SupportsGpuSimulation { get; }
+    int MaxBirds { get; }
+    void RenderSimulation(int firstNewBird, int count, float dt, uint seed,
+        in Matrix4x4 viewProj, int width, int height);
+}
+
 // Steps the simulation and draws it; the host calls Frame once per display frame.
 public sealed class FrameRunner
 {
@@ -29,7 +38,9 @@ public sealed class FrameRunner
     private readonly Simulation _simulation;
     private readonly IGpuRenderer _renderer;
     private InstanceData[] _instances;
+    private int _gpuBirdCount;
     private double _lastTime = double.NaN;
+    private double _startTime;
     private double _fpsWindowStart;
     private int _fpsFrames;
 
@@ -37,7 +48,8 @@ public sealed class FrameRunner
     {
         _simulation = simulation;
         _renderer = renderer;
-        _instances = new InstanceData[simulation.Birds.Length];
+        if (renderer is not IGpuSimulationRenderer { SupportsGpuSimulation: true }) simulation.EnsureInitialized();
+        _instances = renderer is IGpuSimulationRenderer { SupportsGpuSimulation: true } ? [] : new InstanceData[simulation.Birds.Length];
     }
 
     public volatile bool Paused;
@@ -49,30 +61,45 @@ public sealed class FrameRunner
     {
         if (double.IsNaN(_lastTime))
         {
-            _lastTime = _fpsWindowStart = nowSeconds;
+            _lastTime = _fpsWindowStart = _startTime = nowSeconds;
         }
 
         double frameDelta = nowSeconds - _lastTime;
         float dt = Math.Min((float)frameDelta, MaxFrameDelta);
         _lastTime = nowSeconds;
         int frameRate = frameDelta > 0 ? (int)(1.0 / frameDelta) : 60;
-        if (dt > 0f && !Paused) _simulation.Step(dt, frameRate);
-
-        Bird[] birds = _simulation.Birds;
-        if (_instances.Length != birds.Length)
-            Array.Resize(ref _instances, birds.Length);
-        for (int i = 0; i < birds.Length; i++)
+        float simulationDelta = !Paused && dt > 0f ? dt : 0f;
+        if (_renderer is IGpuSimulationRenderer { SupportsGpuSimulation: true } gpuSimulation)
         {
-            _instances[i] = new InstanceData
-            {
-                Position = birds[i].Position,
-                Direction = birds[i].Direction,
-                Up = birds[i].Up,
-            };
-        }
+            if (simulationDelta > 0f) _simulation.AdjustPopulationSize(frameRate, simulationDelta, gpuSimulation.MaxBirds, initializeNewBirds: false);
 
-        Matrix4x4 viewProj = Camera.ViewProjection((float)width / height);
-        _renderer.Render(_instances, in viewProj, width, height);
+            Bird[] gpuBirds = _simulation.Birds;
+            int firstNewBird = Math.Min(_gpuBirdCount, gpuBirds.Length);
+            Matrix4x4 gpuViewProj = Camera.ViewProjection((float)width / height, nowSeconds - _startTime, in gpuBirds[0]);
+            gpuSimulation.RenderSimulation(firstNewBird, gpuBirds.Length, simulationDelta, _simulation.Seed, in gpuViewProj, width, height);
+            _gpuBirdCount = gpuBirds.Length;
+        }
+        else
+        {
+            if (simulationDelta > 0f) _simulation.Step(simulationDelta, frameRate);
+
+            Bird[] birds = _simulation.Birds;
+            if (_instances.Length != birds.Length)
+                Array.Resize(ref _instances, birds.Length);
+            for (int i = 0; i < birds.Length; i++)
+            {
+                _instances[i] = new InstanceData
+                {
+                    Position = birds[i].Position,
+                    Direction = birds[i].Direction,
+                    Up = birds[i].Up,
+                    FlapAngle = birds[i].FlapAngle,
+                };
+            }
+
+            Matrix4x4 viewProj = Camera.ViewProjection((float)width / height, nowSeconds - _startTime, in birds[0]);
+            _renderer.Render(_instances, in viewProj, width, height);
+        }
 
         _fpsFrames++;
         double elapsed = nowSeconds - _fpsWindowStart;

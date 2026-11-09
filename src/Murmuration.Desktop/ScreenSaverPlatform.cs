@@ -41,7 +41,7 @@ internal static class ScreenSaverPlatform
             return;
         }
 
-        var session = new GpuRenderSession(child, new Simulation(count: 100, seed: 1));
+        var session = new GpuRenderSession(child, new Simulation(count: 100, seed: 1, deferInitialization: true));
         try
         {
             session.Start();

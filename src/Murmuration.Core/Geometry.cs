@@ -8,11 +8,13 @@ public struct Vertex
 {
     public Vector3 Position;
     public Vector3 Color;
+    public float WingSide; // +1 left wing, -1 right wing, 0 rigid
 
-    public Vertex(Vector3 position, Vector3 color)
+    public Vertex(Vector3 position, Vector3 color, float wingSide = 0f)
     {
         Position = position;
         Color = color;
+        WingSide = wingSide;
     }
 }
 
@@ -22,6 +24,7 @@ public struct InstanceData
     public Vector3 Position;
     public Vector3 Direction;
     public Vector3 Up;
+    public float FlapAngle; // radians, positive raises wing tips
 }
 
 public static class Geometry
@@ -52,7 +55,7 @@ public static class Geometry
                 new Vector3(wingHalfWidth, 0, -wingHalfHeight),
                 new Vector3(0, 0, wingHalfHeight),
                 new Vector3(0, side * wingLength, 0),
-                Blue, Green);
+                Blue, Green, side);
         }
 
         // Head
@@ -86,23 +89,23 @@ public static class Geometry
     }
 
     // A face is "top" when its outward normal points up (+Z), otherwise "bottom".
-    private static void AddTetrahedron(List<Vertex> v, Vector3 a, Vector3 b, Vector3 c, Vector3 apex, Vector3 topColor, Vector3 bottomColor)
+    private static void AddTetrahedron(List<Vertex> v, Vector3 a, Vector3 b, Vector3 c, Vector3 apex, Vector3 topColor, Vector3 bottomColor, float wingSide = 0f)
     {
         Vector3 centroid = (a + b + c + apex) / 4f;
-        AddTriangle(v, a, b, c, centroid, topColor, bottomColor);
-        AddTriangle(v, a, b, apex, centroid, topColor, bottomColor);
-        AddTriangle(v, b, c, apex, centroid, topColor, bottomColor);
-        AddTriangle(v, c, a, apex, centroid, topColor, bottomColor);
+        AddTriangle(v, a, b, c, centroid, topColor, bottomColor, wingSide);
+        AddTriangle(v, a, b, apex, centroid, topColor, bottomColor, wingSide);
+        AddTriangle(v, b, c, apex, centroid, topColor, bottomColor, wingSide);
+        AddTriangle(v, c, a, apex, centroid, topColor, bottomColor, wingSide);
     }
 
-    private static void AddTriangle(List<Vertex> v, Vector3 a, Vector3 b, Vector3 c, Vector3 solidCentroid, Vector3 topColor, Vector3 bottomColor)
+    private static void AddTriangle(List<Vertex> v, Vector3 a, Vector3 b, Vector3 c, Vector3 solidCentroid, Vector3 topColor, Vector3 bottomColor, float wingSide)
     {
         Vector3 normal = Vector3.Cross(b - a, c - a);
         if (Vector3.Dot(normal, (a + b + c) / 3f - solidCentroid) < 0) normal = -normal;
         Vector3 color = normal.Z >= 0 ? topColor : bottomColor;
 
-        v.Add(new Vertex(a, color));
-        v.Add(new Vertex(b, color));
-        v.Add(new Vertex(c, color));
+        v.Add(new Vertex(a, color, wingSide));
+        v.Add(new Vertex(b, color, wingSide));
+        v.Add(new Vertex(c, color, wingSide));
     }
 }

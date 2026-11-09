@@ -10,6 +10,8 @@ struct VSIn {
     @location(2) instPos: vec3<f32>,
     @location(3) instDir: vec3<f32>,
     @location(4) instUp: vec3<f32>,
+    @location(5) wingSide: f32,
+    @location(6) flapAngle: f32,
 };
 
 struct VSOut {
@@ -24,7 +26,13 @@ fn vs(i: VSIn) -> VSOut {
     let up = normalize(i.instUp);
     let left = cross(up, fwd);
 
-    let world = i.instPos + fwd * i.localPos.x + left * i.localPos.y + up * i.localPos.z;
+    // Wings pivot about the forward axis at their root; positive angle raises the tips.
+    let angle = i.flapAngle * i.wingSide;
+    let c = cos(angle);
+    let s = sin(angle);
+    let local = vec3<f32>(i.localPos.x, i.localPos.y * c - i.localPos.z * s, i.localPos.y * s + i.localPos.z * c);
+
+    let world = i.instPos + fwd * local.x + left * local.y + up * local.z;
 
     var o: VSOut;
     // System.Numerics matrices are row-major; WGSL reads those bytes as the transpose, so multiply as M * v.
