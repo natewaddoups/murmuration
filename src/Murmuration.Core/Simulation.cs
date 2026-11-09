@@ -4,24 +4,6 @@ namespace Murmuration;
 
 public enum ClimbDirection { Neither, Left, Right }
 
-public struct Bird
-{
-    public Vector3 Position;
-    public Quaternion Orientation;
-    public Vector3 DesiredDirection;
-    public Vector3 Direction => Vector3.Transform(Vector3.UnitX, Orientation);
-    public Vector3 Up => Vector3.Transform(Vector3.UnitZ, Orientation);
-    public float Speed;
-    public float PreferredSpeed;
-    public float Mass;
-    public ClimbDirection Climb;
-    public float ClimbStrength;
-    public float FlapRate; // Hz
-    public float PreferredFlapRate; // Hz; FlapRate relaxes back to this when no neighbor is close
-    public float FlapPhase; // radians in [0, 2π)
-    public readonly float FlapAngle => Simulation.FlapAmplitude(Direction.Z) * MathF.Sin(FlapPhase);
-}
-
 public sealed class Simulation
 {
     public static readonly Vector3 Center = new(0, 0, SoftCeiling * 0.62f);
@@ -597,39 +579,5 @@ public sealed class Simulation
         Bird[] birds = Birds;
         Array.Resize(ref birds, newSize);
         Birds = birds;
-    }
-}
-
-internal sealed class PopulationController
-{
-    private float _timeSinceLastBird;
-    private int _lowFrameRateUpdates;
-
-    public int Advance(int count, int frameRate, float dt)
-    {
-        const int minFrameRate = 55;
-        if (frameRate < minFrameRate)
-        {
-            _lowFrameRateUpdates++;
-            if (_lowFrameRateUpdates >= 3 && count > 10)
-                count = Math.Max(10, count - (minFrameRate - frameRate));
-        }
-        else
-        {
-            _lowFrameRateUpdates = 0;
-        }
-
-        if (frameRate > 59 && dt > 0f)
-        {
-            _timeSinceLastBird += dt;
-            int birdsToAdd = (int)_timeSinceLastBird;
-            if (birdsToAdd > 0)
-            {
-                _timeSinceLastBird -= birdsToAdd;
-                count += birdsToAdd;
-            }
-        }
-
-        return count;
     }
 }
