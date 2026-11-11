@@ -38,7 +38,7 @@ public static class Geometry
     public const float GroundHalfSize = 50f;
 
     private static readonly Vector3 Blue = new(0.2f, 0.4f, 0.95f);
-    private static readonly Vector3 Green = new(0.2f, 0.7f, 0.25f);
+    private static readonly Vector3 Green = new(0.2f, 0.5f, 0.2f);
     private static readonly Vector3 BrightBlue = new(0f, 0.3f, 1f);
     private static readonly Vector3 Red = new(1f, 0.1f, 0.1f);
     private static readonly Vector3 White = new(1f, 1f, 1f);
