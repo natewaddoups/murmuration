@@ -28,8 +28,8 @@ public sealed class Simulation
     private const float SoftFloor = 5f;
     private const float SoftCeiling = 20f;
     private const float ClimbSpreadFraction = 0.01f;
-    private const float FlapMinRate = 3f;
-    private const float FlapMaxRate = 4f;
+    private const float FlapMinRate = 3.5f;
+    private const float FlapMaxRate = 3.5f;
     private const float FlapRateChange = 2.0f; // Hz per second
     private const float FlapRateTolerance = 0.1f; // fraction of the target rate
     private const float FlapPhaseTolerance = 0.05f; // fraction of a cycle
