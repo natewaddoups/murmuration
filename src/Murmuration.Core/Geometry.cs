@@ -27,12 +27,20 @@ public struct InstanceData
     public float FlapAngle; // radians, positive raises wing tips
 }
 
+/// <summary>
+/// Provides geometry data for birds and the ground.
+/// </summary>
+/// <remarks>
+/// This code is shared by the CPU and GPU paths.
+/// </remarks>
 public static class Geometry
 {
     public const float GroundHalfSize = 50f;
 
     private static readonly Vector3 Blue = new(0.2f, 0.4f, 0.95f);
     private static readonly Vector3 Green = new(0.2f, 0.7f, 0.25f);
+    private static readonly Vector3 BrightBlue = new(0f, 0.3f, 1f);
+    private static readonly Vector3 Red = new(1f, 0.1f, 0.1f);
     private static readonly Vector3 White = new(1f, 1f, 1f);
     private static readonly Vector3 MediumGray = new(0.5f, 0.5f, 0.5f);
     
@@ -64,7 +72,7 @@ public static class Geometry
             new Vector3(0, 0.015f, -0.01f),
             new Vector3(0, 0, 0.01f),
             new Vector3(0.10f, 0, 0),
-            White, MediumGray);
+            White, White);
 
         // Tail
         AddTetrahedron(v,
@@ -72,7 +80,7 @@ public static class Geometry
             new Vector3(-0.10f, 0.050f, -0.0025f),
             new Vector3(-0.10f, 0, 0.0025f),
             Vector3.Zero,
-            Blue, MediumGray);
+            BrightBlue, Red);
 
         return v.ToArray();
     }

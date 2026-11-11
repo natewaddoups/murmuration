@@ -48,9 +48,9 @@ public sealed class Simulation
     private const float ClimbSpreadFraction = 0.01f;
     private const float FlapMinRate = 3f;
     private const float FlapMaxRate = 4f;
-    private const float FlapRateChange = 1.0f; // Hz per second
+    private const float FlapRateChange = 2.0f; // Hz per second
     private const float FlapRateTolerance = 0.1f; // fraction of the target rate
-    private const float FlapPhaseTolerance = 0.1f; // fraction of a cycle
+    private const float FlapPhaseTolerance = 0.05f; // fraction of a cycle
     // Flap amplitude is interpolated linearly in flight slope between these points; it is 0 at or below FlapDescentSlope.
     private const float FlapDescentSlope = -10f * MathF.PI / 180f;
     private const float FlapLevelAmplitude = 10f * MathF.PI / 180f;
@@ -597,39 +597,5 @@ public sealed class Simulation
         Bird[] birds = Birds;
         Array.Resize(ref birds, newSize);
         Birds = birds;
-    }
-}
-
-internal sealed class PopulationController
-{
-    private float _timeSinceLastBird;
-    private int _lowFrameRateUpdates;
-
-    public int Advance(int count, int frameRate, float dt)
-    {
-        const int minFrameRate = 55;
-        if (frameRate < minFrameRate)
-        {
-            _lowFrameRateUpdates++;
-            if (_lowFrameRateUpdates >= 3 && count > 10)
-                count = Math.Max(10, count - (minFrameRate - frameRate));
-        }
-        else
-        {
-            _lowFrameRateUpdates = 0;
-        }
-
-        if (frameRate > 59 && dt > 0f)
-        {
-            _timeSinceLastBird += dt;
-            int birdsToAdd = (int)_timeSinceLastBird;
-            if (birdsToAdd > 0)
-            {
-                _timeSinceLastBird -= birdsToAdd;
-                count += birdsToAdd;
-            }
-        }
-
-        return count;
     }
 }
