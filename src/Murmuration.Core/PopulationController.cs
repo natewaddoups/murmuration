@@ -2,6 +2,7 @@ namespace Murmuration;
 
 internal sealed class PopulationController
 {
+    internal const int AutomaticGrowthLimit = 1500;
     private float _timeSinceLastBird;
     private int _lowFrameRateUpdates;
 
@@ -19,14 +20,14 @@ internal sealed class PopulationController
             _lowFrameRateUpdates = 0;
         }
 
-        if (frameRate > 59 && dt > 0f)
+        if (count < AutomaticGrowthLimit && frameRate > 59 && dt > 0f)
         {
             _timeSinceLastBird += dt;
             int birdsToAdd = (int)_timeSinceLastBird;
             if (birdsToAdd > 0)
             {
                 _timeSinceLastBird -= birdsToAdd;
-                count += birdsToAdd;
+                count = Math.Min(AutomaticGrowthLimit, count + birdsToAdd);
             }
         }
 

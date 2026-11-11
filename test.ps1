@@ -1,0 +1,1 @@
+ dotnet test .\src\Murmuration.Desktop.Tests\Murmuration.Desktop.Tests.csproj

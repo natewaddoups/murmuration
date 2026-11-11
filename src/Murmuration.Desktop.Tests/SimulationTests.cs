@@ -210,4 +210,28 @@ public class SimulationTests
         simulation.Step(0.01f, 30);
         Assert.That(simulation.Birds, Has.Length.EqualTo(10));
     }
+
+    [Test]
+    public void HighFrameRateDoesNotGrowPopulationBeyondAutomaticLimit()
+    {
+        var simulation = new Simulation(999, 42);
+
+        simulation.AdjustPopulationSize(60, 2f);
+
+        Assert.That(simulation.Birds, Has.Length.EqualTo(1000));
+    }
+
+    [Test]
+    public void PopulationStartedAboveAutomaticLimitOnlyShrinksOnLowFrameRate()
+    {
+        var simulation = new Simulation(1200, 42);
+
+        simulation.AdjustPopulationSize(60, 2f);
+        Assert.That(simulation.Birds, Has.Length.EqualTo(1200));
+
+        simulation.AdjustPopulationSize(30, 0.01f);
+        simulation.AdjustPopulationSize(30, 0.01f);
+        simulation.AdjustPopulationSize(30, 0.01f);
+        Assert.That(simulation.Birds, Has.Length.EqualTo(1175));
+    }
 }
