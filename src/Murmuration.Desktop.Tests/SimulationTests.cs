@@ -44,7 +44,7 @@ public class SimulationTests
     {
         var simulation = new Simulation(64, 42);
 
-        Assert.That(simulation.Birds.All(bird => bird.FlapRate is >= 3f and <= 4f), Is.True);
+        Assert.That(simulation.Birds.All(bird => bird.FlapRate is >= 2.5f and <= 3f), Is.True);
         Assert.That(simulation.Birds.All(bird => bird.FlapPhase is >= 0f and < MathF.Tau), Is.True);
         Assert.That(simulation.Birds.Select(bird => bird.FlapRate).Distinct().Count(), Is.GreaterThan(1));
     }
@@ -52,17 +52,13 @@ public class SimulationTests
     [Test]
     public void FlapPhaseAdvancesByRateAndStaysWithinAmplitude()
     {
+        Simulation isolated = FlapPair(new Vector3(0, 0, 10), 2.75f, 2.75f, 1f, new Vector3(300, 0, 10), 3f, 3f, 0f);
         var simulation = new Simulation(8, 42);
-        Bird[] before = simulation.Birds.ToArray();
         const float dt = 1f / 60f;
 
-        simulation.Step(dt, 60);
+        isolated.Step(dt, 60);
 
-        for (int i = 0; i < before.Length; i++)
-        {
-            float expected = (before[i].FlapPhase + MathF.Tau * before[i].FlapRate * dt) % MathF.Tau;
-            Assert.That(simulation.Birds[i].FlapPhase, Is.EqualTo(expected).Within(1e-5f));
-        }
+        Assert.That(isolated.Birds[0].FlapPhase, Is.EqualTo(1f + MathF.Tau * 2.75f * dt).Within(1e-5f));
 
         for (int frame = 0; frame < 120; frame++)
         {
@@ -79,37 +75,35 @@ public class SimulationTests
     public void NearbyBirdRampsFlapRateTowardNearestBird()
     {
         const float dt = 1f / 60f;
-        Simulation simulation = FlapPair(new Vector3(0, 0, 10), 3f, 3f, 0f, new Vector3(1, 0, 10), 4f, 4f, 0f);
+        Simulation simulation = FlapPair(new Vector3(0, 0, 10), 2.5f, 2.5f, 0f, new Vector3(1, 0, 10), 3f, 3f, 0f);
 
         simulation.Step(dt, 58);
 
-        Assert.That(simulation.Birds[0].FlapRate, Is.EqualTo(3f + 1f * dt).Within(1e-5f));
-        Assert.That(simulation.Birds[1].FlapRate, Is.EqualTo(4f));
+        Assert.That(simulation.Birds[0].FlapRate, Is.EqualTo(2.5f + 0.25f * dt).Within(1e-5f));
+        Assert.That(simulation.Birds[1].FlapRate, Is.EqualTo(3f));
     }
 
     [Test]
     public void DistantNeighborLetsFlapRateReturnToPreferred()
     {
         const float dt = 1f / 60f;
-        Simulation simulation = FlapPair(new Vector3(0, 0, 10), 3.5f, 3f, 0f, new Vector3(30, 0, 10), 4f, 4f, 0f);
+        Simulation simulation = FlapPair(new Vector3(0, 0, 10), 2.75f, 2.5f, 0f, new Vector3(30, 0, 10), 3f, 3f, 1f);
 
         simulation.Step(dt, 58);
 
-        Assert.That(simulation.Birds[0].FlapRate, Is.EqualTo(3.5f - 1f * dt).Within(1e-5f));
+        Assert.That(simulation.Birds[0].FlapRate, Is.EqualTo(2.5f));
+        Assert.That(simulation.Birds[0].FlapPhase, Is.EqualTo(MathF.Tau * 2.5f * dt).Within(1e-5f));
     }
 
     [Test]
-    public void CloseRateHoldsUntilPhasesAlign()
+    public void NearbyBirdPullsFlapPhaseTowardNearestBird()
     {
         const float dt = 1f / 60f;
-        Simulation apart = FlapPair(new Vector3(0, 0, 10), 3.8f, 3.8f, 0f, new Vector3(1, 0, 10), 4f, 4f, MathF.PI);
-        Simulation aligned = FlapPair(new Vector3(0, 0, 10), 3.8f, 3.8f, 0.1f, new Vector3(1, 0, 10), 4f, 4f, 0f);
+        Simulation simulation = FlapPair(new Vector3(0, 0, 10), 2.75f, 2.75f, 0f, new Vector3(1, 0, 10), 2.75f, 2.75f, MathF.PI / 2f);
 
-        apart.Step(dt, 58);
-        aligned.Step(dt, 58);
+        simulation.Step(dt, 58);
 
-        Assert.That(apart.Birds[0].FlapRate, Is.EqualTo(3.8f));
-        Assert.That(aligned.Birds[0].FlapRate, Is.EqualTo(3.8f + 1f * dt).Within(1e-5f));
+        Assert.That(simulation.Birds[0].FlapPhase, Is.EqualTo((MathF.Tau * 2.75f + 5.5f) * dt).Within(1e-5f));
     }
 
     private static Simulation FlapPair(Vector3 firstPosition, float firstRate, float firstPreferred, float firstPhase,

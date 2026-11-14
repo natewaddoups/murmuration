@@ -31,8 +31,7 @@ public sealed class Simulation
     private const float FlapMinRate = 2.5f;
     private const float FlapMaxRate = 3.0f;
     private const float FlapRateDelta = 0.25f; // Hz per second
-    private const float FlapRateTolerance = 0.1f; // fraction of the target rate
-    private const float FlapPhaseTolerance = 0.1f; // fraction of a cycle
+    private const float FlapCouplingStrength = 5.5f; // rad/s; must exceed 2π × (FlapMaxRate - FlapMinRate) to lock
     // Flap amplitude is interpolated linearly in flight slope between these points; it is 0 at or below FlapDescentSlope.
     private const float FlapDescentSlope = -10f * MathF.PI / 180f;
     private const float FlapLevelAmplitude = 10f * MathF.PI / 180f;
@@ -67,8 +66,7 @@ public sealed class Simulation
         const FlapMinRate: f32 = f32({FlapMinRate:R});
         const FlapMaxRate: f32 = f32({FlapMaxRate:R});
         const FlapRateDelta: f32 = f32({FlapRateDelta:R});
-        const FlapRateTolerance: f32 = f32({FlapRateTolerance:R});
-        const FlapPhaseTolerance: f32 = f32({FlapPhaseTolerance:R});
+        const FlapCouplingStrength: f32 = f32({FlapCouplingStrength:R});
         const FlapDescentSlope: f32 = f32({FlapDescentSlope:R});
         const FlapLevelAmplitude: f32 = f32({FlapLevelAmplitude:R});
         const FlapClimbSlope: f32 = f32({FlapClimbSlope:R});
@@ -82,6 +80,7 @@ public sealed class Simulation
 
     private Vector3[] _directions = [];
     private float[] _nextFlapRates = [];
+    private float[] _phaseNudges = []; // rad/s added to the flap phase advance
     private float[,] _distances = new float[0, 0]; // squared distances between birds
     private readonly Random _rng;
     private readonly PopulationController _population = new();
@@ -112,7 +111,7 @@ public sealed class Simulation
 
         float preferredSpeed = Utility.Range(rng, 3, 3.25);
         Vector3 direction = Vector3.Normalize(dir);
-        float flapRate = rng.NextDouble() < 0.5 ? FlapMinRate : FlapMaxRate;
+        float flapRate = Utility.Range(rng, FlapMinRate, FlapMaxRate);
         return new Bird
         {
             Orientation = Utility.CreateOrientation(direction, Vector3.UnitZ),
@@ -166,6 +165,10 @@ public sealed class Simulation
             Vector3 toDown = Vector3.Zero;
             Vector3 toLevel = Vector3.Zero;
             float neighborFlapRate, neighborFlapPhase;
+            float flapWeight = 0f;
+            // Buffered so later birds still see this frame's original rates, matching the GPU's double buffering.
+            _nextFlapRates[i] = bird.PreferredFlapRate;
+            _phaseNudges[i] = 0f;
 
             bool stalled = bird.Speed < StallSpeed;
             if (stalled)
@@ -207,8 +210,14 @@ public sealed class Simulation
             if (CheckNeighbors(i, out Vector3 targetDirection, out Vector3 targetPosition, out neighborFlapRate, out neighborFlapPhase))
             {
                 float targetDistance = Vector3.Distance(bird.Position, targetPosition);
-                if (targetDistance > CloseNeighborRange)
-                    neighborFlapRate = neighborFlapPhase = 0f;
+                flapWeight = Math.Clamp(2f - targetDistance / CloseNeighborRange, 0f, 1f);
+                if (flapWeight >= 1f)
+                {
+                    float step = FlapRateDelta * dt;
+                    _nextFlapRates[i] = bird.FlapRate + Math.Clamp(neighborFlapRate - bird.FlapRate, -step, step);
+                }
+                if (flapWeight > 0f)
+                    _phaseNudges[i] = flapWeight * FlapCouplingStrength * MathF.Sin(neighborFlapPhase - bird.FlapPhase);
 
                 if (targetDistance > CloseNeighborRange)
                     bird.Speed = MathF.Min(MaxSpeed, bird.Speed * (1f + FlockSpeedAdjustmentRate * dt));
@@ -245,8 +254,6 @@ public sealed class Simulation
                 toDown + 
                 toLevel;
             bird.DesiredDirection = ClampSlope(sum.LengthSquared() > 1e-12f ? Vector3.Normalize(sum) : direction, direction);
-            // Buffered so later birds still see this frame's original rates, matching the GPU's double buffering.
-            _nextFlapRates[i] = AdjustFlapRate(bird, neighborFlapRate, neighborFlapPhase);
         }
 
         for (int i = 0; i < birds.Length; i++)
@@ -261,23 +268,6 @@ public sealed class Simulation
         if (slope < 0f) return FlapLevelAmplitude * (slope - FlapDescentSlope) / -FlapDescentSlope;
         if (slope < FlapClimbSlope) return FlapLevelAmplitude + (FlapClimbAmplitude - FlapLevelAmplitude) * slope / FlapClimbSlope;
         return FlapClimbAmplitude;
-    }
-
-    private static float PhaseDifference(float first, float second)
-    {
-        float difference = (first - second) % MathF.Tau;
-        if (difference > MathF.PI) difference -= MathF.Tau;
-        else if (difference < -MathF.PI) difference += MathF.Tau;
-        return difference;
-    }
-
-    // Matches the nearest bird's rate when in phase, otherwise switches to the other of the two rates; with no target, keeps the current rate.
-    private static float AdjustFlapRate(in Bird bird, float targetRate, float targetPhase)
-    {
-        if (targetRate <= 0f) return bird.FlapRate;
-        float difference = PhaseDifference(bird.FlapPhase, targetPhase);
-        if (MathF.Abs(difference) < FlapPhaseTolerance * MathF.Tau) return targetRate;
-        return targetRate > (FlapMinRate + FlapMaxRate) * 0.5f ? FlapMinRate : FlapMaxRate;
     }
 
     private void Move(float dt)
@@ -310,7 +300,7 @@ public sealed class Simulation
 
             // and update position based on new direction and speed.
             bird.Position += newDirection * bird.Speed * dt;
-            bird.FlapPhase = (bird.FlapPhase + MathF.Tau * bird.FlapRate * dt) % MathF.Tau;
+            bird.FlapPhase = (bird.FlapPhase + (MathF.Tau * bird.FlapRate + _phaseNudges[i]) * dt) % MathF.Tau;
             if (FlapAmplitude(newDirection.Z) == 0f) bird.FlapPhase = 0f;
 
             // This is really more of a "think" operation, but it depends on direction change, which is computed in this functions.
@@ -336,6 +326,7 @@ public sealed class Simulation
             _distances = new float[count, count];
             _directions = new Vector3[count];
             _nextFlapRates = new float[count];
+            _phaseNudges = new float[count];
         }
 
         for (int i = 0; i < count; i++)
@@ -374,12 +365,13 @@ public sealed class Simulation
 
             float distance = _distances[index, j];
             if (distance > NeighborRange * NeighborRange) continue;
-            if (found == NeighborCount && distance >= bestDistance[found - 1]) continue;
 
             // Only look forward. Adding this condition made the flock much more cohesive.
             Vector3 delta = Birds[j].Position - position;
             if (Vector3.Dot(delta, forward) <= 0f) continue;
             if (Vector3.Dot(_directions[j], forward) < MinNeighborAlignment) continue;
+
+            if (found == NeighborCount && distance >= bestDistance[found - 1]) continue;
 
             int slot = found < NeighborCount ? found++ : NeighborCount - 1;
             while (slot > 0 && bestDistance[slot - 1] > distance)

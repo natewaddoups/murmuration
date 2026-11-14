@@ -172,7 +172,7 @@ fn initialize(@builtin(global_invocation_id) id: vec3<u32>) {
     bird.DirectionX = direction.x;
     bird.DirectionY = direction.y;
     bird.DirectionZ = direction.z;
-    bird.Flap = vec4<f32>(select(FlapMinRate, FlapMaxRate, initialRandom(index, 9u) < 0.5),
+    bird.Flap = vec4<f32>(mix(FlapMinRate, FlapMaxRate, initialRandom(index, 9u)),
         initialRandom(index, 10u) * TAU, 0.0, 0.0);
     bird.Flap.z = bird.Flap.x;
     birdsOut[index] = bird;
@@ -184,19 +184,6 @@ fn flapAmplitude(directionZ: f32) -> f32 {
     if (slope < 0.0) { return FlapLevelAmplitude * (slope - FlapDescentSlope) / -FlapDescentSlope; }
     if (slope < FlapClimbSlope) { return FlapLevelAmplitude + (FlapClimbAmplitude - FlapLevelAmplitude) * slope / FlapClimbSlope; }
     return FlapClimbAmplitude;
-}
-
-fn phaseDifference(first: f32, second: f32) -> f32 {
-    var difference = (first - second) % TAU;
-    if (difference > TAU * 0.5) { difference -= TAU; } else if (difference < -TAU * 0.5) { difference += TAU; }
-    return difference;
-}
-
-fn adjustFlapRate(rate: f32, preferred: f32, phase: f32, targetRate: f32, targetPhase: f32) -> f32 {
-    if (targetRate <= 0.0) { return rate; }
-    let difference = phaseDifference(phase, targetPhase);
-    if (abs(difference) < FlapPhaseTolerance * TAU) { return targetRate; }
-    return select(FlapMaxRate, FlapMinRate, targetRate > (FlapMinRate + FlapMaxRate) * 0.5);
 }
 
 fn updateBird(index: u32, input: GpuBird, delta: f32, localIndex: u32) -> GpuBird {
@@ -265,6 +252,7 @@ fn updateBird(index: u32, input: GpuBird, delta: f32, localIndex: u32) -> GpuBir
     }
     var neighborFlapRate = 0.0;
     var neighborFlapPhase = 0.0;
+    var flapWeight = 0.0;
     if (found > 0u && distances[0] >= 1e-12) {
         var sum = vec3<f32>(0.0);
         var directionSum = vec3<f32>(0.0);
@@ -298,11 +286,10 @@ fn updateBird(index: u32, input: GpuBird, delta: f32, localIndex: u32) -> GpuBir
         }
         if (hasTarget) {
             let targetDistance = distance(position, targetPosition);
-            if (targetDistance <= CloseNeighborRange) {
-                let nearest = birdsIn[best[0]];
-                neighborFlapRate = nearest.Flap.x;
-                neighborFlapPhase = nearest.Flap.y;
-            }
+            let nearest = birdsIn[best[0]];
+            neighborFlapRate = nearest.Flap.x;
+            neighborFlapPhase = nearest.Flap.y;
+            flapWeight = clamp(2.0 - targetDistance / CloseNeighborRange, 0.0, 1.0);
             if (targetDistance > CloseNeighborRange) {
                 bird.Flight.x = min(MaxSpeed, bird.Flight.x * (1.0 + FlockSpeedAdjustmentRate * delta));
             } else if (targetDistance < CloseNeighborRange) {
@@ -333,8 +320,16 @@ fn updateBird(index: u32, input: GpuBird, delta: f32, localIndex: u32) -> GpuBir
     }
     bird.Flight.x = clamp(bird.Flight.x, MinSpeed, MaxSpeed);
     bird.Position = vec4<f32>(position + newDirection * bird.Flight.x * delta, 0.0);
-    bird.Flap.x = adjustFlapRate(bird.Flap.x, bird.Flap.z, bird.Flap.y, neighborFlapRate, neighborFlapPhase);
-    bird.Flap.y = (bird.Flap.y + TAU * bird.Flap.x * delta) % TAU;
+    var phaseNudge = 0.0;
+    bird.Flap.x = bird.Flap.z;
+    if (flapWeight >= 1.0) {
+        let rateStep = FlapRateDelta * delta;
+        bird.Flap.x = input.Flap.x + clamp(neighborFlapRate - input.Flap.x, -rateStep, rateStep);
+    }
+    if (flapWeight > 0.0) {
+        phaseNudge = flapWeight * FlapCouplingStrength * sin(neighborFlapPhase - bird.Flap.y);
+    }
+    bird.Flap.y = (bird.Flap.y + (TAU * bird.Flap.x + phaseNudge) * delta) % TAU;
     if (flapAmplitude(newDirection.z) == 0.0) { bird.Flap.y = 0.0; }
     if (direction.z <= 0.0 && newDirection.z > 0.0) {
         let roll = randomValue(index ^ simulation.seed, simulation.step);

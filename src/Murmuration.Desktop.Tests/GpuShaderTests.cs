@@ -256,7 +256,7 @@ public unsafe class GpuShaderTests
                     Assert.That(initialized.Speed, Is.InRange(3f, 3.25f));
                     Assert.That(initialized.Mass, Is.InRange(0.25f, 0.5f));
                     Assert.That(initialized.ClimbStrength, Is.InRange(0.7f, 1.2f));
-                    Assert.That(initialized.FlapRate, Is.InRange(3f, 4f));
+                    Assert.That(initialized.FlapRate, Is.InRange(2.5f, 3f));
                     Assert.That(initialized.PreferredFlapRate, Is.EqualTo(initialized.FlapRate));
                     Assert.That(initialized.FlapPhase, Is.InRange(0f, MathF.Tau));
                     Assert.That(System.Numerics.Vector3.Distance(initialized.Direction, initialized.DesiredDirection), Is.LessThan(1e-4f));
