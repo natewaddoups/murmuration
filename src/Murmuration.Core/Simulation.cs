@@ -28,11 +28,11 @@ public sealed class Simulation
     private const float SoftFloor = 5f;
     private const float SoftCeiling = 20f;
     private const float ClimbSpreadFraction = 0.01f;
-    private const float FlapMinRate = 3.5f;
-    private const float FlapMaxRate = 3.5f;
-    private const float FlapRateChange = 2.0f; // Hz per second
+    private const float FlapMinRate = 2.5f;
+    private const float FlapMaxRate = 3.0f;
+    private const float FlapRateDelta = 0.25f; // Hz per second
     private const float FlapRateTolerance = 0.1f; // fraction of the target rate
-    private const float FlapPhaseTolerance = 0.05f; // fraction of a cycle
+    private const float FlapPhaseTolerance = 0.1f; // fraction of a cycle
     // Flap amplitude is interpolated linearly in flight slope between these points; it is 0 at or below FlapDescentSlope.
     private const float FlapDescentSlope = -10f * MathF.PI / 180f;
     private const float FlapLevelAmplitude = 10f * MathF.PI / 180f;
@@ -66,7 +66,7 @@ public sealed class Simulation
         const TAU: f32 = f32({MathF.Tau:R});
         const FlapMinRate: f32 = f32({FlapMinRate:R});
         const FlapMaxRate: f32 = f32({FlapMaxRate:R});
-        const FlapRateChange: f32 = f32({FlapRateChange:R});
+        const FlapRateDelta: f32 = f32({FlapRateDelta:R});
         const FlapRateTolerance: f32 = f32({FlapRateTolerance:R});
         const FlapPhaseTolerance: f32 = f32({FlapPhaseTolerance:R});
         const FlapDescentSlope: f32 = f32({FlapDescentSlope:R});
@@ -112,7 +112,7 @@ public sealed class Simulation
 
         float preferredSpeed = Utility.Range(rng, 3, 3.25);
         Vector3 direction = Vector3.Normalize(dir);
-        float flapRate = Utility.Range(rng, FlapMinRate, FlapMaxRate);
+        float flapRate = rng.NextDouble() < 0.5 ? FlapMinRate : FlapMaxRate;
         return new Bird
         {
             Orientation = Utility.CreateOrientation(direction, Vector3.UnitZ),
@@ -246,7 +246,7 @@ public sealed class Simulation
                 toLevel;
             bird.DesiredDirection = ClampSlope(sum.LengthSquared() > 1e-12f ? Vector3.Normalize(sum) : direction, direction);
             // Buffered so later birds still see this frame's original rates, matching the GPU's double buffering.
-            _nextFlapRates[i] = AdjustFlapRate(bird, neighborFlapRate, neighborFlapPhase, dt);
+            _nextFlapRates[i] = AdjustFlapRate(bird, neighborFlapRate, neighborFlapPhase);
         }
 
         for (int i = 0; i < birds.Length; i++)
@@ -271,20 +271,13 @@ public sealed class Simulation
         return difference;
     }
 
-    // Ramps toward the nearest bird's rate, but holds a close rate until the phases line up; with no target, returns to the preferred rate.
-    private static float AdjustFlapRate(in Bird bird, float targetRate, float targetPhase, float dt)
+    // Matches the nearest bird's rate when in phase, otherwise switches to the other of the two rates; with no target, keeps the current rate.
+    private static float AdjustFlapRate(in Bird bird, float targetRate, float targetPhase)
     {
-        float goal = bird.PreferredFlapRate;
-        if (targetRate > 0f)
-        {
-            if (MathF.Abs(bird.FlapRate - targetRate) <= FlapRateTolerance * targetRate &&
-                MathF.Abs(PhaseDifference(bird.FlapPhase, targetPhase)) > FlapPhaseTolerance * MathF.Tau)
-                return bird.FlapRate;
-            goal = targetRate;
-        }
-
-        float maxChange = FlapRateChange * dt;
-        return bird.FlapRate + Math.Clamp(goal - bird.FlapRate, -maxChange, maxChange);
+        if (targetRate <= 0f) return bird.FlapRate;
+        float difference = PhaseDifference(bird.FlapPhase, targetPhase);
+        if (MathF.Abs(difference) < FlapPhaseTolerance * MathF.Tau) return targetRate;
+        return targetRate > (FlapMinRate + FlapMaxRate) * 0.5f ? FlapMinRate : FlapMaxRate;
     }
 
     private void Move(float dt)
@@ -318,6 +311,7 @@ public sealed class Simulation
             // and update position based on new direction and speed.
             bird.Position += newDirection * bird.Speed * dt;
             bird.FlapPhase = (bird.FlapPhase + MathF.Tau * bird.FlapRate * dt) % MathF.Tau;
+            if (FlapAmplitude(newDirection.Z) == 0f) bird.FlapPhase = 0f;
 
             // This is really more of a "think" operation, but it depends on direction change, which is computed in this functions.
             // If transitioning to climb from level flight, a fraction of birds will pick a direction to diverge.

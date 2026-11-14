@@ -172,7 +172,7 @@ fn initialize(@builtin(global_invocation_id) id: vec3<u32>) {
     bird.DirectionX = direction.x;
     bird.DirectionY = direction.y;
     bird.DirectionZ = direction.z;
-    bird.Flap = vec4<f32>(FlapMinRate + initialRandom(index, 9u) * (FlapMaxRate - FlapMinRate),
+    bird.Flap = vec4<f32>(select(FlapMinRate, FlapMaxRate, initialRandom(index, 9u) < 0.5),
         initialRandom(index, 10u) * TAU, 0.0, 0.0);
     bird.Flap.z = bird.Flap.x;
     birdsOut[index] = bird;
@@ -192,15 +192,11 @@ fn phaseDifference(first: f32, second: f32) -> f32 {
     return difference;
 }
 
-fn adjustFlapRate(rate: f32, preferred: f32, phase: f32, targetRate: f32, targetPhase: f32, delta: f32) -> f32 {
-    var goal = preferred;
-    if (targetRate > 0.0) {
-        if (abs(rate - targetRate) <= FlapRateTolerance * targetRate
-            && abs(phaseDifference(phase, targetPhase)) > FlapPhaseTolerance * TAU) { return rate; }
-        goal = targetRate;
-    }
-    let maxChange = FlapRateChange * delta;
-    return rate + clamp(goal - rate, -maxChange, maxChange);
+fn adjustFlapRate(rate: f32, preferred: f32, phase: f32, targetRate: f32, targetPhase: f32) -> f32 {
+    if (targetRate <= 0.0) { return rate; }
+    let difference = phaseDifference(phase, targetPhase);
+    if (abs(difference) < FlapPhaseTolerance * TAU) { return targetRate; }
+    return select(FlapMaxRate, FlapMinRate, targetRate > (FlapMinRate + FlapMaxRate) * 0.5);
 }
 
 fn updateBird(index: u32, input: GpuBird, delta: f32, localIndex: u32) -> GpuBird {
@@ -337,8 +333,9 @@ fn updateBird(index: u32, input: GpuBird, delta: f32, localIndex: u32) -> GpuBir
     }
     bird.Flight.x = clamp(bird.Flight.x, MinSpeed, MaxSpeed);
     bird.Position = vec4<f32>(position + newDirection * bird.Flight.x * delta, 0.0);
-    bird.Flap.x = adjustFlapRate(bird.Flap.x, bird.Flap.z, bird.Flap.y, neighborFlapRate, neighborFlapPhase, delta);
+    bird.Flap.x = adjustFlapRate(bird.Flap.x, bird.Flap.z, bird.Flap.y, neighborFlapRate, neighborFlapPhase);
     bird.Flap.y = (bird.Flap.y + TAU * bird.Flap.x * delta) % TAU;
+    if (flapAmplitude(newDirection.z) == 0.0) { bird.Flap.y = 0.0; }
     if (direction.z <= 0.0 && newDirection.z > 0.0) {
         let roll = randomValue(index ^ simulation.seed, simulation.step);
         bird.Climb = select(select(0u, 2u, roll < ClimbSpreadFraction * 2.0), 1u, roll < ClimbSpreadFraction);
