@@ -15,7 +15,11 @@ public class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            if (Program.Options.Mode == StartupMode.ScreenSaver)
+            if (Program.Options.Mode == StartupMode.Configure)
+            {
+                desktop.MainWindow = new ConfigureWindow();
+            }
+            else if (Program.Options.Mode == StartupMode.ScreenSaver)
             {
                 ScreenSaverWindowCoordinator.Start(desktop);
             }
@@ -59,12 +63,6 @@ public static class Program
         if (options.Mode == StartupMode.Preview)
         {
             ScreenSaverPlatform.RunPreview(options.ParentWindow);
-            return;
-        }
-
-        if (options.Mode == StartupMode.Configure)
-        {
-            ScreenSaverPlatform.ShowMessage(options.ParentWindow, "Murmuration has no configurable options.", "Murmuration Screen Saver");
             return;
         }
 

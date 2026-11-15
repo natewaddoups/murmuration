@@ -70,10 +70,20 @@ public sealed class ScreenSaverArgumentsTests
 
     [TestCase("/c")]
     [TestCase("/c:123")]
-    public void ConfigureSwitchSelectsInformationalMode(string argument)
+    public void ConfigureSwitchSelectsConfigureMode(string argument)
     {
         Assert.That(CommandLineArguments.TryParse([argument], out var options, out var error), Is.True, error);
         Assert.That(options.Mode, Is.EqualTo(StartupMode.Configure));
+    }
+
+    [TestCase(null, 100)]
+    [TestCase(5, 100)]
+    [TestCase(2000, 100)]
+    [TestCase(10, 10)]
+    [TestCase(1500, 1500)]
+    public void SettingsNormalizeOutOfRangeCounts(int? stored, int expected)
+    {
+        Assert.That(ScreenSaverSettings.Normalize(stored), Is.EqualTo(expected));
     }
 
     [TestCase("/p")]

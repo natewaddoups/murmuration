@@ -13,8 +13,9 @@ internal static class ScreenSaverWindowCoordinator
 {
     public static void Start(IClassicDesktopStyleApplicationLifetime desktop)
     {
+        int birdCount = ScreenSaverSettings.Load();
         var dismiss = new DismissController(desktop);
-        var first = CreateWindow(new Simulation(count: 100, seed: 1, deferInitialization: true), dismiss, desktop);
+        var first = CreateWindow(new Simulation(count: birdCount, seed: 1, deferInitialization: true), dismiss, desktop);
         first.Opacity = 0;
         first.Opened += (_, _) =>
         {
@@ -34,7 +35,7 @@ internal static class ScreenSaverWindowCoordinator
             {
                 Window window = i == 0
                     ? first
-                    : CreateWindow(new Simulation(count: 100, seed: i + 1, deferInitialization: true), dismiss, desktop);
+                    : CreateWindow(new Simulation(count: birdCount, seed: i + 1, deferInitialization: true), dismiss, desktop);
                 PlaceOnScreen(window, screens[i]);
                 if (i > 0)
                     window.Show();
