@@ -33,7 +33,9 @@ You can also invoke the .scr file just like an .exe file, because every .scr fil
 
 ### Command Line
 
-Invoke `.\run.ps` to build and run.
+Invoke `.\run.ps` to build and run as a Windows executable.
+
+Invoke `.\run-web.ps` to build and run in a browser.
 
 ### Windows Screen Saver
 
